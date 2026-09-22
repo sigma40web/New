@@ -1,0 +1,36 @@
+{
+  "family": "pacing_designer",
+  "version": "3.1.0",
+  "role": "pacing_designer",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.1.0.",
+  "style_sensitive": true,
+  "manuscript_producing": false,
+  "identity_variant": "planner_compact",
+  "model_class": "R",
+  "input_variables": [
+    "story_spec",
+    "blueprint",
+    "season",
+    "skeleton",
+    "bible_summary",
+    "target_chapters"
+  ],
+  "output_schema": null,
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.5,
+    "max_tokens": 16000,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "regenerate",
+    "on_truncation": "fail",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.1.0 — Korean-webnovel craft (ADR-0056): series pacing principles and the per-season pacing map (new pacing_designer family; arc_planner reads the arc rhythm, chapter_planner reads the chapter's rhythm position), episode shape and POV discipline for planners, and a concrete Korean-webnovel style guide (paragraph and beat rhythm, inner voice, system lines, anti-translationese and anti-Western-slop lists) for the writer, reviser, assembler and judges.",
+  "regression_cases": [
+    "pacing_designer.fixture.smoke"
+  ],
+  "content_hash": "sha256:00cdbca242ce34b83844437e8aadaa7aa67639c27ad40836cdfdf69b9c1da0a6"
+}

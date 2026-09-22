@@ -38,6 +38,16 @@ import { composeIdentity, ProfileStore, type ComposedIdentity } from '@yeonjae/n
 import { PromptRegistry } from '@yeonjae/prompts';
 import { type Gateway } from '@yeonjae/gateway';
 import { resolveWorkflowPins } from './workflow-pins.js';
+import {
+  mergePacing,
+  normalizePacingSeason,
+  pacingArcId,
+  pacingRulesFor,
+  renderArcRhythm,
+  rhythmSkeleton,
+  type PacingMap,
+  type SeasonWindow,
+} from './pacing.js';
 import { WorkflowError } from './errors.js';
 import { assertDesignOutput } from './design-output.js';
 import { composedRefFor, loadIntoStore } from './identity-from-intake.js';
@@ -1001,6 +1011,83 @@ export async function buildFullBible(
   );
 
   const bible: StoryBible = { ...draftBible, promises: blueprintStep.promises };
+
+  // ---- Pacing map (ADR-0056): every chapter gets a rhythm slot, season by season -------------------
+  // A job pinned to a prompt set without pacing_designer (ADR-0053) keeps the season-level arcs.
+  let blueprint = blueprintStep.blueprint;
+  let blueprintArtifactId = blueprintStep.artifactId;
+  if (ctx.promptSet.mapping.pacing_designer) {
+    const parts: PacingMap[] = [];
+    for (const season of blueprint.seasons) {
+      const window: SeasonWindow = {
+        ordinal: season.ordinal,
+        title: season.title,
+        from: season.chapter_range_est.from,
+        to: season.chapter_range_est.to,
+      };
+      const arcOffset = parts.reduce((a, p) => a + p.arcs.length, 0);
+      const part = await runDesignStep(
+        ctx,
+        `pacing:s${season.ordinal}`,
+        `pacing:${concept.id}:s${season.ordinal}`,
+        async (activityId) => {
+          const call = await modelCall(ctx, {
+            step: `pacing:s${season.ordinal}`,
+            family: 'pacing_designer',
+            activityId,
+            variables: {
+              story_spec: specText,
+              blueprint: renderBlueprint(blueprint, lang),
+              season: `시즌 ${season.ordinal} 「${season.title}」 (${window.from}~${window.to}화): ${season.objective}${season.thesis ? ` / 핵심 갈등: ${season.thesis}` : ''}${season.entry_state ? ` / 진입: ${season.entry_state}` : ''}${season.exit_state ? ` / 이탈: ${season.exit_state}` : ''}`,
+              skeleton: rhythmSkeleton(
+                window,
+                intake.target_chapters,
+                pacingRulesFor(intake.target_chapters),
+              ),
+              bible_summary: renderBibleSummary(bible, lang),
+              target_chapters: String(intake.target_chapters),
+            },
+            block,
+          });
+          const map = normalizePacingSeason(
+            call.output,
+            window,
+            arcOffset,
+            pacingRulesFor(intake.target_chapters),
+          );
+          await saveArtifact(ctx, {
+            step: `pacing:s${season.ordinal}`,
+            kind: 'pacing_season',
+            key: `v${spec.version}:s${season.ordinal}`,
+            payload: map,
+          });
+          return map;
+        },
+      );
+      parts.push(part);
+    }
+    const paced = { ...blueprint, pacing: mergePacing(parts) } as SeriesBlueprint;
+    const pacedRef = await runStep(ctx, 'pacing_assembly', async () => {
+      const v = validatorFor<SeriesBlueprint>('series-blueprint.schema.json')(paced);
+      if (!v.ok)
+        throw new WorkflowError(
+          'ARC_PLAN_INVALID',
+          `paced blueprint does not validate: ${v.errors.map((e) => `${e.path} ${e.message}`).join('; ')}`,
+          { step: 'pacing_assembly', recommendedActions: ['regenerate'] },
+        );
+      const ref = await saveArtifact(ctx, {
+        step: 'pacing_assembly',
+        kind: 'series_blueprint',
+        key: `v${spec.version}:paced`,
+        schema: 'series-blueprint.schema.json',
+        payload: v.value,
+      });
+      return { artifactId: ref.artifact_id, blueprint: v.value };
+    });
+    blueprint = pacedRef.blueprint;
+    blueprintArtifactId = pacedRef.artifactId;
+  }
+
   const bibleRef = await runStep(ctx, 'bible_assembly', async () => {
     const ref = await saveArtifact(ctx, {
       step: 'bible_assembly',
@@ -1018,8 +1105,8 @@ export async function buildFullBible(
     concept,
     bible,
     bibleArtifactId: bibleRef.artifactId,
-    blueprint: blueprintStep.blueprint,
-    blueprintArtifactId: blueprintStep.artifactId,
+    blueprint,
+    blueprintArtifactId,
     cast: entities.filter((e) => e.type === 'character').length,
     locations: entities.filter((e) => e.type === 'location').length,
     organizations: entities.filter((e) => e.type === 'organization').length,
@@ -1038,17 +1125,35 @@ export interface ArcSchedule {
   readonly arcs: readonly {
     id: string;
     seasonId: string;
+    seasonOrdinal: number;
     from: number;
     to: number;
     ordinal: number;
   }[];
 }
 
-/** Which arc a chapter belongs to, from the blueprint's season windows. Each season is one major arc. */
+/**
+ * Which arc a chapter belongs to. A paced blueprint (ADR-0056) schedules its pacing arcs (8–30 chapters);
+ * an unpaced one keeps one major arc per season.
+ */
 export function scheduleFromBlueprint(projectId: string, blueprint: SeriesBlueprint): ArcSchedule {
+  const seasonId = (ordinal: number) =>
+    blueprint.seasons.find((s) => s.ordinal === ordinal)?.id ?? planIds.season(projectId, ordinal);
+  if (blueprint.pacing?.arcs.length)
+    return {
+      arcs: blueprint.pacing.arcs.map((a) => ({
+        id: pacingArcId(projectId, a),
+        seasonId: seasonId(a.season_ordinal),
+        seasonOrdinal: a.season_ordinal,
+        from: a.from,
+        to: a.to,
+        ordinal: a.ordinal,
+      })),
+    };
   const arcs = blueprint.seasons.map((s) => ({
     id: planIds.arc(projectId, s.ordinal, 1),
     seasonId: s.id ?? planIds.season(projectId, s.ordinal),
+    seasonOrdinal: s.ordinal,
     from: s.chapter_range_est.from,
     to: s.chapter_range_est.to,
     ordinal: s.ordinal,
@@ -1077,7 +1182,7 @@ export async function planArcFromBlueprint(
     previousArcExit?: string | undefined;
   },
 ): Promise<{ arcPlan: ArcPlan; artifactId: string }> {
-  const season = input.blueprint.seasons.find((s) => s.ordinal === input.arc.ordinal);
+  const season = input.blueprint.seasons.find((s) => s.ordinal === input.arc.seasonOrdinal);
   return runStep(
     ctx,
     'arc_plan',
@@ -1107,6 +1212,7 @@ export async function planArcFromBlueprint(
           arc_brief: ko
             ? `아크 ${input.arc.ordinal} (id ${input.arc.id})는 ${input.arc.from}~${input.arc.to}화를 덮는다. ${season?.entry_state ? `진입 상태: ${season.entry_state}. ` : ''}${season?.exit_state ? `도달할 이탈 상태: ${season.exit_state}.` : ''}${input.previousArcExit ? ` 이전 아크의 끝: ${input.previousArcExit}` : ''} 비트의 target_chapter_offset은 0(${input.arc.from}화)부터 ${input.arc.to - input.arc.from}까지다. 참여자와 장소는 아래 정사 상태의 등록부 id만 쓴다.`
             : `Arc ${input.arc.ordinal} (id ${input.arc.id}) covers chapters ${input.arc.from}–${input.arc.to}. ${season?.entry_state ? `Entry state: ${season.entry_state}. ` : ''}${season?.exit_state ? `Exit state to reach: ${season.exit_state}.` : ''}${input.previousArcExit ? ` Previous arc ended: ${input.previousArcExit}` : ''} Beats must carry target_chapter_offset from 0 (chapter ${input.arc.from}) to ${input.arc.to - input.arc.from}. Participants and locations must be registry ids from the canon state below.`,
+          rhythm: renderArcRhythm(input.blueprint.pacing, input.arc.ordinal),
           canon_state: renderBibleSummary(input.bible, lang),
           open_promises: renderPromiseLines(input.bible, lang),
         },
@@ -1137,7 +1243,11 @@ export async function planArcFromBlueprint(
         kind: 'major',
         ordinal: input.arc.ordinal,
         version: 1,
-        title: str(raw.title) ?? season?.title ?? `Arc ${input.arc.ordinal}`,
+        title:
+          str(raw.title) ??
+          input.blueprint.pacing?.arcs.find((a) => a.ordinal === input.arc.ordinal)?.title ??
+          season?.title ??
+          `Arc ${input.arc.ordinal}`,
         objective: str(raw.objective) ?? season?.objective ?? '',
         conflict: str(raw.conflict) ?? input.blueprint.main_conflict,
         chapter_range_est: { from: input.arc.from, to: input.arc.to },

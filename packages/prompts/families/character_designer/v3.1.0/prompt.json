@@ -1,0 +1,34 @@
+{
+  "family": "character_designer",
+  "version": "3.1.0",
+  "role": "character_designer",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.1.0.",
+  "style_sensitive": true,
+  "manuscript_producing": false,
+  "identity_variant": "planner_compact",
+  "model_class": "R",
+  "input_variables": [
+    "story_spec",
+    "concept",
+    "cast_brief"
+  ],
+  "output_schema": null,
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.6,
+    "max_tokens": 7000,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "repair_then_regenerate",
+    "on_truncation": "fail",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.1.0 — Korean-webnovel craft (ADR-0056): series pacing principles and the per-season pacing map (new pacing_designer family; arc_planner reads the arc rhythm, chapter_planner reads the chapter's rhythm position), episode shape and POV discipline for planners, and a concrete Korean-webnovel style guide (paragraph and beat rhythm, inner voice, system lines, anti-translationese and anti-Western-slop lists) for the writer, reviser, assembler and judges.",
+  "regression_cases": [
+    "character_designer.full_bible_names",
+    "character_designer.full_bible_fields"
+  ],
+  "content_hash": "sha256:d71c5f579d17f09765dfc56180176bc93a3a5a8da9c9e82edb73fd303947352a"
+}

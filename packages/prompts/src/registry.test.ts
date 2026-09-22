@@ -27,10 +27,11 @@ const REQUIRED_FAMILIES = [
   'canon_extractor',
   'extraction_reconciler',
   'factual_summarizer',
+  'pacing_designer',
 ];
-const TOTAL_PROMPT_VERSIONS = 256;
+const TOTAL_PROMPT_VERSIONS = 267;
 /** The active default set (latest `active` version of every family). */
-const ACTIVE_VERSION = '3.0.0';
+const ACTIVE_MAJOR = /@3\.\d+\.\d+$/;
 
 describe('prompt registry (ADR-0016)', () => {
   const reg = PromptRegistry.fromDirectory();
@@ -167,9 +168,11 @@ describe('prompt registry (ADR-0016)', () => {
 
   it('builds a pinned prompt set from the active versions', () => {
     const set = reg.activeSet();
-    expect(Object.keys(set.mapping)).toHaveLength(25);
+    expect(Object.keys(set.mapping)).toHaveLength(26);
+    expect(set.mapping.pacing_designer).toBe('pacing_designer@3.1.0');
+    expect(set.mapping.scene_writer).toBe('scene_writer@3.1.0');
     for (const fam of Object.keys(set.mapping)) {
-      expect(set.mapping[fam], fam).toBe(`${fam}@${ACTIVE_VERSION}`);
+      expect(set.mapping[fam], fam).toMatch(ACTIVE_MAJOR);
     }
     expect(set.id).toMatch(/^set:[0-9a-f]{16}$/);
   });

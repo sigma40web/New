@@ -104,7 +104,7 @@ describe('live planner output normalization', () => {
     expect(n.knowledge_deltas[0]?.proposition_id).toBeUndefined();
     expect(n.relationship_deltas[0]).toMatchObject({ from_id: HEROINE, to_id: MC, axis: 'trust' });
     expect(n.setups).toEqual([]);
-    expect(n.local_satisfaction[0]?.type).toBe('satisfaction');
+    expect(n.local_satisfaction[0].type).toBe('satisfaction');
     expect(n.emotional_movement).toEqual({ start: '체념', end: '불안' });
     expect(n.length_target).toEqual({ unit: 'characters', value: 5500, tolerance_ratio: 0.12 });
     expect(n.continuity_risks[0]?.description).toContain('루카스는 백작가의 셋째다');

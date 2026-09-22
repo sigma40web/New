@@ -1,0 +1,39 @@
+{
+  "family": "scene_writer",
+  "version": "3.1.0",
+  "role": "scene_writer",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.1.0.",
+  "style_sensitive": true,
+  "manuscript_producing": true,
+  "identity_variant": "writer_full",
+  "model_class": "P",
+  "input_variables": [
+    "chapter_contract",
+    "scene_plan",
+    "scene_no",
+    "previous_text",
+    "canon_state",
+    "knowledge_lists",
+    "register_digests",
+    "open_promises",
+    "length_target_words"
+  ],
+  "output_schema": "scene-draft.schema.json",
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.85,
+    "max_tokens": 9000,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "repair_then_regenerate",
+    "on_truncation": "regenerate",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.1.0 — Korean-webnovel craft (ADR-0056): series pacing principles and the per-season pacing map (new pacing_designer family; arc_planner reads the arc rhythm, chapter_planner reads the chapter's rhythm position), episode shape and POV discipline for planners, and a concrete Korean-webnovel style guide (paragraph and beat rhythm, inner voice, system lines, anti-translationese and anti-Western-slop lists) for the writer, reviser, assembler and judges.",
+  "regression_cases": [
+    "scene_writer.fixture.smoke"
+  ],
+  "content_hash": "sha256:5d6508cf9e932b75d3b6c6c6bb786a1ab76c6d3998b542812f93597ac4320980"
+}

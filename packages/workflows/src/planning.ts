@@ -22,6 +22,7 @@ import { compileBlock } from '@yeonjae/narrative';
 import { type LengthTarget } from '@yeonjae/prose';
 import { WorkflowError } from './errors.js';
 import { normalizeContractOutput } from './plan-normalize.js';
+import { renderRhythmPosition, type PacingMap } from './pacing.js';
 import {
   bind,
   existingArtifact,
@@ -418,6 +419,8 @@ export interface ContractInput {
   readonly contractId: string;
   /** Registry and promises rendered for the planner; absent falls back to the pinned-state notes. */
   readonly bible?: StoryBible | undefined;
+  /** The series pacing map (ADR-0056); the planner reads this chapter's rhythm position from it. */
+  readonly pacing?: PacingMap | undefined;
 }
 
 /**
@@ -465,6 +468,7 @@ export async function generateContract(
         variables: {
           arc_plan: JSON.stringify(input.arcPlan),
           chapter_number: String(input.chapterNo),
+          rhythm_position: renderRhythmPosition(input.pacing, input.chapterNo),
           previous_chapter_summary: input.previousSummary,
           canon_state: input.bible
             ? `${renderBibleState(input.bible, ctx.bindings, lang)}\n\n${

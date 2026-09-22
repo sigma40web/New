@@ -3,6 +3,28 @@
 The single place that records implementation status (ADR-0043). Update it in every checkpoint commit.
 Everything else in `docs/` describes design; only this file claims what exists and what has run.
 
+## Checkpoint K2 — Korean-webnovel craft, pacing map, episode structure — 2026-09-22
+
+Branch `hoplite/gortyn-c23fe3a9--craft-pacing`, stacked on K1. Steps 4–6; ADR-0056 records the decision.
+
+- **Pacing map in the bible (step 5).** New `pacing_designer` family designs each season as arcs of 8–30
+  chapters with a rhythm slot for every chapter; `pacing.ts` supplies the deterministic skeleton and validates
+  coverage, contiguity, a climax per arc, frustration streak ≤ 3, payoff gap ≤ 5, tension ≥ 8 for ≤ 4 chapters
+  and a slow opening for 60+-chapter serials (violations regenerate). Stored as `series-blueprint.pacing`
+  (additive schema field); arcs are scheduled per pacing arc; `arc_planner` reads the arc rhythm table and
+  `chapter_planner` reads the chapter's rhythm position. Older plans keep season-level arcs.
+- **Korean-webnovel craft (step 4) and episode structure (step 6).** v3.1.0 for 11 families: series pacing
+  principles and harem spacing for the architect and character designer; episode shape (도입/전개/절단),
+  POV discipline and "do not pull the next chapter's event forward" for the chapter planner; 4–8 concrete
+  beats per scene with the opening and hook pinned to the contract for the scene planner; a concrete style guide
+  (paragraph and beat rhythm, ‘ ’ inner voice, system lines, anti-번역투 and anti-Western-slop lists) and a
+  newly written rhythm example for the writer, reviser and assembler; explicit slop checks for the prose judge
+  and the episode shape for the structure judge. Scene writer output budget raised to 9,000 tokens.
+- **Korean prose lint.** `ko-lint.ts` measures paragraph count/median, long paragraphs, dialogue and
+  inner-voice ratios, narration runs, pronoun-led sentences, 번역투 and Western stock phrases; the prose judge
+  receives the report for Korean projects. It does not gate on its own.
+- Contrast baseline re-frozen (entries byte-identical, pins updated).
+
 ## Checkpoint K1 — defect pass, Korean architecture, fully Korean prompts — 2026-09-22
 
 Branch `hoplite/gortyn-c23fe3a9` (base `4a86abe`). Steps 1–3 of the Korean-webnovel quality programme;
