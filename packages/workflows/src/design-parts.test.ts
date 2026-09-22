@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { designPartsEnabled, mergeParts } from './design-parts.js';
+import { designPartsEnabled, mergeParts, stripNulls } from './design-parts.js';
 
 describe('part-scoped design calls (ADR-0057)', () => {
   it('concatenates arrays across parts and lets a later part refine an item with the same key', () => {
@@ -44,6 +44,14 @@ describe('part-scoped design calls (ADR-0057)', () => {
       { chapter_no: 2, beat: '수정' },
       { chapter_no: 3 },
     ]);
+  });
+
+  it('treats null fields as absent but keeps null items for the validator to reject', () => {
+    expect(
+      stripNulls({ characters: [{ display_name: '벨리알', age_at_start: null }, null] }),
+    ).toEqual({
+      characters: [{ display_name: '벨리알' }, null],
+    });
   });
 
   it('is an explicit operator choice', () => {

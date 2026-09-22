@@ -504,7 +504,7 @@ export async function buildFullBible(
     castParts.push({
       key: `named-${i + 1}`,
       instruction: (soFar) =>
-        `이번 호출에서는 다음 인물만 완전히 설계한다: ${group.join(', ')}. 이 인물들에 관한 비밀·명제만 propositions에 넣는다. 이미 확정된 인물: ${confirmed(soFar)}.`,
+        `이번 호출에서는 다음 인물만 완전히 설계한다: ${group.join(', ')}. registers는 핵심 상대 3~4명만 쓴다. 이 인물에 관한 비밀·명제만 propositions에 넣는다. 이미 확정된 인물: ${confirmed(soFar)}.`,
     });
   }
   for (const [key, who] of [
@@ -1206,17 +1206,19 @@ export async function buildFullBible(
             },
             block,
           });
+          const repairs: string[] = [];
           const map = normalizePacingSeason(
             output,
             window,
             arcOffset,
             pacingRulesFor(intake.target_chapters),
+            repairs,
           );
           await saveArtifact(ctx, {
             step: `pacing:s${season.ordinal}`,
             kind: 'pacing_season',
             key: `v${spec.version}:s${season.ordinal}`,
-            payload: map,
+            payload: { ...map, repairs },
           });
           return map;
         },

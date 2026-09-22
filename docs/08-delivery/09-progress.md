@@ -18,9 +18,23 @@ Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live`, stacked on K2. Steps 7–8
   output is validated as before. Default remains one call per stage; older pinned jobs are unchanged.
 - **Per-role routes:** `YEONJAE_ROLE_MODELS` routes named roles (e.g. arc and chapter planners) to a model
   regardless of class.
-- **Live-run finding that motivated both:** the operator's Genspark bridge sits behind a quick tunnel that
-  returns HTTP 524 for responses slower than about two minutes. A 116 s bible-model call succeeded; the first
-  full-cast call (~174 s) was lost with a 524.
+- **Pacing repairs:** rhythm rules now repair a near-miss season deterministically (recorded with the season)
+  and reject only a plan that needs more than max(3, 10%) repairs or breaks structure. Design outputs drop JSON
+  `null` fields before validation (a live antagonist's unknown age was rejected as a malformed field).
+- **Live run (step 8), 2026-09-22 — blocked by the provider quota, resumable.** Project "엑스트라로 세계를 구하는
+  방법" (200화, ko, academy + possession, harem), `YEONJAE_PROVIDER_MODE=genspark`, R = `claude-opus-4-6`,
+  P/M/C and arc/chapter planners = `gemini-3.8-flash`, `YEONJAE_DESIGN_PARTS=on`.
+  - Spec (gemini) and two concepts (opus, ~100 s each) were schema-valid and idiomatic Korean; concept 1
+    (placement-duel opening, 89-day survival pressure, slow academy start) was approved.
+  - The operator's bridge sits behind a quick tunnel that returns HTTP 524 for responses slower than about
+    two minutes: a 116 s call succeeded; an unbounded full-cast call (~174 s) and an unbounded single-character
+    call (~125 s) were lost. With part budgets, every cast part returned in 43–62 s; the full 9-part cast (7
+    named characters plus two the story needed) completed and is idiomatic Korean with speech-level voice notes
+    (해요체/하게체/반말 per relationship).
+  - The world stage then stopped on HTTP 429: the Genspark account's "AI Chat 5-hour limit" (both models;
+    cooldown reported ≈ 5 h). Nothing after the cast has been generated. Resume with `pnpm cli novel:resume
+    <project> --stop-after=2` then `pnpm cli novel:run <project> --once` (bible), then `novel:run` (chapters 1–2)
+    with the same environment; completed parts replay from their checkpoints.
 
 ## Checkpoint K2 — Korean-webnovel craft, pacing map, episode structure — 2026-09-22
 

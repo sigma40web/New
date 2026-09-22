@@ -20,7 +20,13 @@ export interface DesignPart {
   readonly key: string;
   /** The Korean scope instruction for this part, built from what earlier parts produced. */
   readonly instruction: (soFar: Rec) => string;
+  /** Output budget for this part in characters (default 3,500). */
+  readonly budgetChars?: number | undefined;
 }
+
+// Measured on the live bridge: an unbounded single-character part ran past the tunnel's ~2-minute cap,
+// the same part with a ~3,000-character budget returned in under a minute.
+const DEFAULT_PART_BUDGET = 3500;
 
 /** True when the pinned version of `family` declares a `part` variable. */
 export function declaresPart(ctx: WorkflowContext, family: string): boolean {
@@ -92,6 +98,22 @@ export function mergeParts(parts: readonly Rec[]): Rec {
   return out;
 }
 
+/**
+ * Live models write `null` for a field they cannot fill (an antagonist's unknown age). The design
+ * contracts treat such a FIELD as absent, so null-valued fields are removed before validation. A null
+ * array ITEM is left alone: it is a malformed item the validator must still reject.
+ */
+export function stripNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripNulls);
+  if (typeof value === 'object' && value !== null)
+    return Object.fromEntries(
+      Object.entries(value as Rec)
+        .filter(([, v]) => v !== null)
+        .map(([k, v]) => [k, stripNulls(v)]),
+    );
+  return value;
+}
+
 export async function callInParts<T extends Rec>(
   ctx: WorkflowContext,
   input: {
@@ -112,7 +134,7 @@ export async function callInParts<T extends Rec>(
       variables: declares ? { ...input.variables, part: WHOLE_SCOPE } : input.variables,
       block: input.block,
     });
-    return call.output;
+    return stripNulls(call.output) as T;
   }
   const outputs: Rec[] = [];
   for (const part of input.parts) {
@@ -120,10 +142,13 @@ export async function callInParts<T extends Rec>(
       step: input.step,
       family: input.family,
       activityId: `${input.activityId}:part:${part.key}`,
-      variables: { ...input.variables, part: part.instruction(mergeParts(outputs)) },
+      variables: {
+        ...input.variables,
+        part: `${part.instruction(mergeParts(outputs))}\n출력 분량: 이번 응답(JSON 전체)은 ${String(part.budgetChars ?? DEFAULT_PART_BUDGET)}자 이내로 쓴다. 서술 필드는 한두 문장으로 압축하고, 필요한 항목은 빠뜨리지 않는다.`,
+      },
       block: input.block,
     });
     outputs.push(call.output);
   }
-  return mergeParts(outputs) as T;
+  return stripNulls(mergeParts(outputs)) as T;
 }

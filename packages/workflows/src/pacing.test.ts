@@ -111,31 +111,43 @@ describe('pacing map (ADR-0056)', () => {
     rejects(raw, /chapters without a slot: 10/);
   });
 
-  it('rejects an arc with no climax', () => {
+  const repaired = (raw: unknown) => {
+    const notes: string[] = [];
+    const map = normalizePacingSeason(raw, SEASON, 0, rules, notes);
+    return { map, notes };
+  };
+
+  it('repairs an arc with no climax by promoting its most tense slot', () => {
     const raw = good();
     raw.chapters[28] = slot(29, { role: 'incident' });
-    rejects(raw, /arc 2 has no climax/);
+    const { map, notes } = repaired(raw);
+    expect(notes).toEqual(['29화: climax role assigned']);
+    expect(map.arcs[1]?.climax_chapter).toBe(29);
   });
 
-  it('rejects a frustration streak beyond three chapters', () => {
-    const raw = good();
-    for (const n of [17, 18, 19, 20]) raw.chapters[n - 1] = slot(n, { frustration: true });
-    rejects(raw, /frustration streak/);
-  });
-
-  it('rejects a payoff drought', () => {
-    const raw = good();
-    for (let n = 16; n <= 22; n++) raw.chapters[n - 1] = slot(n, { payoff: 'none' });
-    rejects(raw, /no payoff for more than 5 chapters/);
-  });
-
-  it('rejects a climax plateau and a rushed opening', () => {
+  it('repairs a near-miss rhythm: one extra 고구마, a payoff drought, a plateau, a hot opening', () => {
+    const streak = good();
+    for (const n of [17, 18, 19, 20]) streak.chapters[n - 1] = slot(n, { frustration: true });
+    expect(repaired(streak).notes).toEqual(['20화: frustration streak capped at 3']);
+    const drought = good();
+    for (let n = 16; n <= 22; n++) drought.chapters[n - 1] = slot(n, { payoff: 'none' });
+    const d = repaired(drought);
+    expect(d.notes).toEqual(['21화: payoff gap capped at 5']);
+    expect(d.map.chapters[20]?.payoff).toBe('emotion');
     const plateau = good();
     for (let n = 20; n <= 24; n++) plateau.chapters[n - 1] = slot(n, { tension: 9 });
-    rejects(plateau, /tension stays ≥ 8/);
-    const rushed = good();
-    rushed.chapters[4] = slot(5, { role: 'climax', tension: 9 });
-    rejects(rushed, /too intense for the slow opening/);
+    expect(repaired(plateau).notes).toEqual(['24화: tension plateau broken']);
+    const hot = good();
+    hot.chapters[4] = slot(5, { tension: 9 });
+    const h = repaired(hot);
+    expect(h.notes).toEqual(['5화: slow opening: tension capped at 7']);
+    expect(h.map.chapters[4]?.tension).toBe(7);
+  });
+
+  it('rejects a plan that needs more than a few repairs', () => {
+    const raw = good();
+    raw.chapters = raw.chapters.map((c) => ({ ...c, frustration: true }));
+    rejects(raw, /rhythm repairs \(budget 3\)/);
   });
 
   it('renders the arc rhythm and a chapter rhythm position in Korean', () => {

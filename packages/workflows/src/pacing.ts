@@ -8,8 +8,9 @@
  *
  * It is produced per season by the `pacing_designer` family from a deterministic rhythm skeleton, then
  * validated here. Structure (coverage, contiguity, one climax per arc) is enforced; rhythm rules (frustration
- * streaks, payoff gaps, tension plateaus, a slow opening) are enforced too. A violation is a planning
- * rejection, so the design step regenerates rather than writing a rushed or stalled plan into the bible.
+ * streaks, payoff gaps, tension plateaus, a slow opening) are repaired when a plan misses by a few slots and
+ * rejected when it misses by more, so the design step regenerates rather than writing a rushed or stalled
+ * plan into the bible.
  */
 import { uuidFromKey } from '@yeonjae/domain';
 import { WorkflowError } from './errors.js';
@@ -197,7 +198,7 @@ export function rhythmSkeleton(
   }
   if (season.from === 1 && rules.slowOpeningChapters > 0)
     lines.push(
-      `- 연재 초반: 1~3화는 상황 제시와 첫 훅(긴장 3~5), 3화 안에 첫 작은 사이다. 4~${rules.slowOpeningChapters}화는 규칙·인물 소개와 첫 목표(긴장 4~6). ${rules.slowOpeningChapters}화 이전에는 클라이맥스를 두지 않는다.`,
+      `- 연재 초반: 1~3화는 상황 제시와 첫 훅(긴장 3~5), 3화 안에 첫 작은 사이다. 4~${rules.slowOpeningChapters}화는 규칙·인물 소개와 첫 목표(긴장 4~6). ${rules.slowOpeningChapters}화까지는 긴장 7을 넘기지 않는다(작은 도입 아크의 클라이맥스도 7 이하).`,
     );
   lines.push(
     `- 규칙: 고구마 최대 ${rules.maxFrustrationStreak}화 연속, 보상(payoff가 none이 아닌 회차) 간격 최대 ${rules.maxPayoffGap}화, 긴장 8 이상 최대 ${rules.maxHighTensionRun}화 연속, 아크마다 climax 역할 회차 하나 이상.`,
@@ -234,6 +235,8 @@ export function normalizePacingSeason(
   season: SeasonWindow,
   arcOffset: number,
   rules: PacingRules = DEFAULT_PACING_RULES,
+  /** Receives the deterministic rhythm repairs applied to a near-miss plan. */
+  notes?: string[],
 ): PacingMap {
   const r = isRec(raw) ? raw : {};
   const rawArcs = (Array.isArray(r.arcs) ? (r.arcs as unknown[]) : []).filter(isRec);
@@ -321,37 +324,62 @@ export function normalizePacingSeason(
     });
   }
 
+  // Rhythm rules are REPAIRED deterministically when the plan is close (a few slots off), and the plan
+  // is rejected when it needs more than a small number of repairs: a near-miss is a label, a far miss is
+  // a plan that does not pace.
+  const repairs: string[] = [];
+  const budget = Math.max(3, Math.ceil(chapters.length * 0.1));
+  const set = (i: number, patch: Partial<PacingChapter>, why: string) => {
+    const c = chapters[i];
+    if (!c) return;
+    chapters[i] = { ...c, ...patch };
+    repairs.push(`${c.chapter_no}화: ${why}`);
+  };
+
   // Every arc has a climax slot; the arc's climax chapter is its most tense climax slot.
-  arcs.forEach((a, i) => {
+  arcs.forEach((a, ai) => {
+    const idx = chapters.map((c, i) => ({ c, i })).filter(({ c }) => c.arc_ordinal === a.ordinal);
+    if (!idx.some(({ c }) => c.role === 'climax')) {
+      const pick = idx.reduce((m, x) => (x.c.tension >= m.c.tension ? x : m));
+      set(pick.i, { role: 'climax', tension: Math.max(pick.c.tension, 7) }, 'climax role assigned');
+    }
     const climaxes = chapters.filter((c) => c.arc_ordinal === a.ordinal && c.role === 'climax');
-    if (climaxes.length === 0) reject(`arc ${a.ordinal} has no climax chapter`, season);
     const peak = climaxes.reduce((m, c) => (c.tension > m.tension ? c : m));
-    arcs[i] = { ...a, climax_chapter: peak.chapter_no };
+    arcs[ai] = { ...a, climax_chapter: peak.chapter_no };
   });
 
-  // Rhythm rules.
   let streak = 0;
   let high = 0;
   let sincePayoff = 0;
-  for (const c of chapters) {
+  chapters.forEach((c0, i) => {
+    let c = c0;
+    if (c.chapter_no <= rules.slowOpeningChapters && c.tension > 7) {
+      set(i, { tension: 7 }, 'slow opening: tension capped at 7');
+      c = chapters[i] ?? c;
+    }
     streak = c.frustration ? streak + 1 : 0;
-    if (streak > rules.maxFrustrationStreak)
-      reject(
-        `chapter ${c.chapter_no} extends a frustration streak beyond ${rules.maxFrustrationStreak}`,
-        season,
-      );
+    if (streak > rules.maxFrustrationStreak) {
+      set(i, { frustration: false }, `frustration streak capped at ${rules.maxFrustrationStreak}`);
+      streak = 0;
+    }
     high = c.tension >= 8 ? high + 1 : 0;
-    if (high > rules.maxHighTensionRun)
-      reject(
-        `tension stays ≥ 8 for more than ${rules.maxHighTensionRun} chapters at ${c.chapter_no}`,
-        season,
-      );
+    if (high > rules.maxHighTensionRun) {
+      if (c.role !== 'climax') set(i, { tension: 7 }, 'tension plateau broken');
+      else set(i - 1, { tension: 7 }, 'tension plateau broken before the climax');
+      high = c.role === 'climax' ? 1 : 0;
+    }
     sincePayoff = c.payoff === 'none' ? sincePayoff + 1 : 0;
-    if (sincePayoff > rules.maxPayoffGap)
-      reject(`no payoff for more than ${rules.maxPayoffGap} chapters at ${c.chapter_no}`, season);
-    if (c.chapter_no <= rules.slowOpeningChapters && (c.role === 'climax' || c.tension > 7))
-      reject(`chapter ${c.chapter_no} is too intense for the slow opening`, season);
-  }
+    if (sincePayoff > rules.maxPayoffGap) {
+      set(i, { payoff: 'emotion' }, `payoff gap capped at ${rules.maxPayoffGap}`);
+      sincePayoff = 0;
+    }
+  });
+  if (repairs.length > budget)
+    reject(
+      `needs ${repairs.length} rhythm repairs (budget ${budget}): ${repairs.slice(0, 8).join('; ')}`,
+      season,
+    );
+  notes?.push(...repairs);
   return { arcs, chapters };
 }
 
