@@ -38,6 +38,7 @@ import { composeIdentity, ProfileStore, type ComposedIdentity } from '@yeonjae/n
 import { PromptRegistry } from '@yeonjae/prompts';
 import { type Gateway } from '@yeonjae/gateway';
 import { resolveWorkflowPins } from './workflow-pins.js';
+import { callInParts, type DesignPart } from './design-parts.js';
 import {
   mergePacing,
   normalizePacingSeason,
@@ -485,14 +486,47 @@ export async function buildFullBible(
           `Design 6–12 characters: protagonist, antagonist(s), 2–4 allies/mentors, love interest if romance is present, at least one foil. Every character needs registers toward each key counterpart.`,
         ].join('\n');
 
-  const cast = await runDesignStep(ctx, 'cast', `cast:${concept.id}`, async (activityId) => {
-    const call = await modelCall<CastOutput>(ctx, {
-      step: 'cast',
-      family: 'character_designer',
-      activityId,
-      variables: { story_spec: specText, concept: conceptText, cast_brief: castBrief },
-      block,
+  // Part-scoped cast (ADR-0057): one named character per call, then the two the story still needs.
+  const named = [intake.main_character, ...(intake.supporting_characters ?? [])]
+    .filter(isDefined)
+    .map((c) => c.name);
+  const confirmed = (soFar: Record<string, unknown>) => {
+    const list = Array.isArray(soFar.characters)
+      ? (soFar.characters as Record<string, unknown>[])
+      : [];
+    return list.length
+      ? list.map((c) => `${txt(c.display_name, '?')}(${txt(c.role, '?')})`).join(', ')
+      : '(없음)';
+  };
+  const castParts: DesignPart[] = [];
+  for (let i = 0; i < named.length; i++) {
+    const group = named.slice(i, i + 1);
+    castParts.push({
+      key: `named-${i + 1}`,
+      instruction: (soFar) =>
+        `이번 호출에서는 다음 인물만 완전히 설계한다: ${group.join(', ')}. 이 인물들에 관한 비밀·명제만 propositions에 넣는다. 이미 확정된 인물: ${confirmed(soFar)}.`,
     });
+  }
+  for (const [key, who] of [
+    ['rest-antagonist', '적대 세력 쪽 핵심 인물 1명'],
+    ['rest-ally', '조력자·스승 또는 대비 인물 1명'],
+  ] as const)
+    castParts.push({
+      key,
+      instruction: (soFar) =>
+        `이번 호출에서는 캐스트 브리프에 이름이 없지만 이야기에 꼭 필요한 새 인물 중 ${who}만 설계한다. 이미 확정된 인물: ${confirmed(soFar)}. 이미 확정된 인물은 다시 쓰지 않는다.`,
+    });
+  const cast = await runDesignStep(ctx, 'cast', `cast:${concept.id}`, async (activityId) => {
+    const call = {
+      output: await callInParts<CastOutput>(ctx, {
+        step: 'cast',
+        family: 'character_designer',
+        activityId,
+        variables: { story_spec: specText, concept: conceptText, cast_brief: castBrief },
+        block,
+        parts: castParts,
+      }),
+    };
     assertDesignOutput('cast', call.output);
     if (!Array.isArray(call.output.characters) || call.output.characters.length === 0)
       throw new WorkflowError('SPEC_INVALID', 'character_designer returned no characters', {
@@ -519,14 +553,42 @@ export async function buildFullBible(
     return { output: call.output, artifactId: ref.artifact_id };
   });
 
+  const listed = (soFar: Record<string, unknown>, key: string, field: string) => {
+    const list = Array.isArray(soFar[key]) ? (soFar[key] as Record<string, unknown>[]) : [];
+    return (
+      list
+        .map((x) => txt(x[field]))
+        .filter(Boolean)
+        .join('; ') || '(없음)'
+    );
+  };
   const world = await runDesignStep(ctx, 'world', `world:${concept.id}`, async (activityId) => {
-    const call = await modelCall<WorldOutput>(ctx, {
-      step: 'world',
-      family: 'world_builder',
-      activityId,
-      variables: { story_spec: specText, concept: conceptText },
-      block,
-    });
+    const call = {
+      output: await callInParts<WorldOutput>(ctx, {
+        step: 'world',
+        family: 'world_builder',
+        activityId,
+        variables: { story_spec: specText, concept: conceptText },
+        block,
+        parts: [
+          {
+            key: 'rules',
+            instruction: () =>
+              '이번 호출에서는 world_rules만 설계한다(8~14개). locations, organizations, terminology는 빈 배열로 둔다.',
+          },
+          {
+            key: 'organizations',
+            instruction: (soFar) =>
+              `이번 호출에서는 organizations만 설계한다. 다른 배열은 빈 배열로 둔다. 이미 확정된 세계 규칙: ${listed(soFar, 'world_rules', 'statement')}.`,
+          },
+          {
+            key: 'places',
+            instruction: (soFar) =>
+              `이번 호출에서는 locations와 terminology만 설계한다. world_rules와 organizations는 빈 배열로 둔다. 이미 확정된 조직: ${listed(soFar, 'organizations', 'display_name')}.`,
+          },
+        ],
+      }),
+    };
     assertDesignOutput('world', call.output);
     if (
       !Array.isArray(call.output.world_rules) ||
@@ -557,17 +619,36 @@ export async function buildFullBible(
     'power_system',
     `power:${concept.id}`,
     async (activityId) => {
-      const call = await modelCall<PowerOutput>(ctx, {
-        step: 'power_system',
-        family: 'power_system_designer',
-        activityId,
-        variables: {
-          story_spec: specText,
-          concept: conceptText,
-          world_rules: JSON.stringify(world.output.world_rules ?? [], null, 1),
-        },
-        block,
-      });
+      const call = {
+        output: await callInParts<PowerOutput>(ctx, {
+          step: 'power_system',
+          family: 'power_system_designer',
+          activityId,
+          variables: {
+            story_spec: specText,
+            concept: conceptText,
+            world_rules: JSON.stringify(world.output.world_rules ?? [], null, 1),
+          },
+          block,
+          parts: [
+            {
+              key: 'rules',
+              instruction: () =>
+                '이번 호출에서는 system_rules와 ranks만 설계한다. abilities와 milestones는 빈 배열로 둔다.',
+            },
+            {
+              key: 'abilities',
+              instruction: (soFar) =>
+                `이번 호출에서는 abilities만 설계한다. 다른 배열은 빈 배열로 둔다. 이미 확정된 등급: ${listed(soFar, 'ranks', 'name')}.`,
+            },
+            {
+              key: 'milestones',
+              instruction: (soFar) =>
+                `이번 호출에서는 milestones만 설계한다. 다른 배열은 빈 배열로 둔다. 전체 ${intake.target_chapters}화에 고르게 퍼뜨린다. 이미 확정된 등급: ${listed(soFar, 'ranks', 'name')}.`,
+            },
+          ],
+        }),
+      };
       assertDesignOutput('power_system', call.output);
       if (
         !Array.isArray(call.output.system_rules) ||
@@ -872,9 +953,21 @@ export async function buildFullBible(
     'blueprint',
     `blueprint:${concept.id}`,
     async (activityId) => {
-      const call = await modelCall<(Partial<SeriesBlueprint> & { promises?: RawPromise[] }) | null>(
-        ctx,
-        {
+      const seasonsOf = (soFar: Record<string, unknown>) => {
+        const list = Array.isArray(soFar.seasons)
+          ? (soFar.seasons as Record<string, unknown>[])
+          : [];
+        return (
+          list
+            .map((x) => {
+              const w = x.chapter_range_est as { from?: unknown; to?: unknown } | undefined;
+              return `${txt(x.title, '?')} (${txt(w?.from, '?')}~${txt(w?.to, '?')}화): ${txt(x.objective)}`;
+            })
+            .join(' / ') || '(없음)'
+        );
+      };
+      const call = {
+        output: await callInParts<Partial<SeriesBlueprint> & { promises?: RawPromise[] }>(ctx, {
           step: 'blueprint',
           family: 'story_architect',
           activityId,
@@ -885,11 +978,42 @@ export async function buildFullBible(
             target_chapters: String(intake.target_chapters),
           },
           block,
-        },
-      );
+          parts: [
+            {
+              key: 'core',
+              instruction: () =>
+                'story_promise, reader_fantasy, main_conflict, protagonist_arc, ending, endgame_requirements만 작성한다. seasons, character_arcs, promises는 빈 배열로 두고 progression_arc는 생략한다.',
+            },
+            {
+              key: 'seasons',
+              instruction: () =>
+                'seasons와 progression_arc만 작성한다. 다른 배열은 빈 배열로 둔다. 시즌은 목표 회차 수 전체를 빈틈없이 덮는다.',
+            },
+            {
+              key: 'character-arcs-heroines',
+              instruction: (soFar) =>
+                `character_arcs만 작성한다: 히로인과 연애 상대 전원. 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
+            },
+            {
+              key: 'character-arcs-others',
+              instruction: (soFar) =>
+                `character_arcs만 작성한다: 히로인이 아닌 주요 인물 3~4명(적대자, 원작 주인공, 조력자). 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
+            },
+            {
+              key: 'promises-early',
+              instruction: (soFar) =>
+                `promises만 작성한다: 앞쪽 두 시즌에 심는 떡밥·미스터리·관계 비트 8~14개. 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
+            },
+            {
+              key: 'promises-late',
+              instruction: (soFar) =>
+                `promises만 작성한다: 뒤쪽 시즌에 심거나 크게 회수되는 떡밥·미스터리·관계 비트 8~14개. 앞서 확정된 약속과 겹치지 않게 한다. 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
+            },
+          ],
+        }),
+      };
       const raw = call.output;
       if (
-        !raw ||
         !str(raw.ending?.summary) ||
         !Array.isArray(raw.ending?.final_state_assertions) ||
         !raw.ending.final_state_assertions.length ||
@@ -1031,10 +1155,43 @@ export async function buildFullBible(
         `pacing:s${season.ordinal}`,
         `pacing:${concept.id}:s${season.ordinal}`,
         async (activityId) => {
-          const call = await modelCall(ctx, {
+          const windows: DesignPart[] = [
+            {
+              key: 'arcs',
+              instruction: () =>
+                '이번 호출에서는 이 시즌의 arcs만 설계한다. chapters는 빈 배열로 둔다.',
+            },
+          ];
+          for (let from = window.from; from <= window.to; from += 15) {
+            const to = Math.min(window.to, from + 14);
+            windows.push({
+              key: `ch${from}-${to}`,
+              instruction: (soFar) => {
+                const arcs = Array.isArray(soFar.arcs)
+                  ? (soFar.arcs as Record<string, unknown>[])
+                  : [];
+                const slots = Array.isArray(soFar.chapters)
+                  ? (soFar.chapters as Record<string, unknown>[])
+                  : [];
+                const recent = slots
+                  .slice(-3)
+                  .map((c) => `${txt(c.chapter_no)}화 ${txt(c.role)}: ${txt(c.beat)}`)
+                  .join(' / ');
+                const arcList = arcs
+                  .map(
+                    (a) =>
+                      `${txt(a.title)}(${txt(a.from)}~${txt(a.to)}화, 클라이맥스 ${txt(a.climax_chapter)}화)`,
+                  )
+                  .join(', ');
+                return `이번 호출에서는 ${from}~${to}화의 chapters만 작성한다. arcs는 빈 배열로 둔다. 확정된 아크: ${arcList || '(없음)'}. 직전 회차: ${recent || '(없음)'}.`;
+              },
+            });
+          }
+          const output = await callInParts<Record<string, unknown>>(ctx, {
             step: `pacing:s${season.ordinal}`,
             family: 'pacing_designer',
             activityId,
+            parts: windows,
             variables: {
               story_spec: specText,
               blueprint: renderBlueprint(blueprint, lang),
@@ -1050,7 +1207,7 @@ export async function buildFullBible(
             block,
           });
           const map = normalizePacingSeason(
-            call.output,
+            output,
             window,
             arcOffset,
             pacingRulesFor(intake.target_chapters),
@@ -1660,4 +1817,9 @@ function renderBlueprint(b: SeriesBlueprint, lang: 'en' | 'ko' = 'en'): string {
     ),
     `Protagonist arc: ${b.protagonist_arc.start_state} → ${b.protagonist_arc.end_state}; turning points: ${b.protagonist_arc.turning_points.map((t) => `${t.description} (ch.${t.window.from}–${t.window.to})`).join('; ')}`,
   ].join('\n');
+}
+
+/** Text of a scalar model field for a part instruction; objects and absent values render as the fallback. */
+function txt(v: unknown, fallback = ''): string {
+  return typeof v === 'string' || typeof v === 'number' ? String(v) : fallback;
 }

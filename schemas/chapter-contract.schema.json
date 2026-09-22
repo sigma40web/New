@@ -93,6 +93,11 @@
         "type": "string"
       }
     },
+    "title": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Episode title shown to readers (e.g. Korean 회차 제목); optional (ADR-0057)."
+    },
     "purpose": {
       "type": "string",
       "minLength": 1

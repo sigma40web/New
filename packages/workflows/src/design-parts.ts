@@ -1,0 +1,129 @@
+/**
+ * Part-scoped design calls (ADR-0057).
+ *
+ * A complete bible stage (a 10-person cast, a season of 50 chapter slots) is one long generation. Behind a
+ * provider or tunnel with a response-time cap, a long generation is lost whole: the upstream finishes, the
+ * response never arrives, and the retry is exactly as long. Asking for the design in bounded parts keeps
+ * every call short, and lets each part see what earlier parts decided (the part instruction is built from
+ * the merged output so far).
+ *
+ * Parts are only used when the PINNED prompt version declares a `part` variable (ADR-0053): a job pinned to
+ * an older version makes the single call it always made. Every part is its own checkpointed model call with
+ * its own activity id, so a crash replays paid parts instead of regenerating them.
+ */
+import { type WorkflowContext, modelCall } from './runtime.js';
+
+type Rec = Record<string, unknown>;
+type Block = Parameters<typeof modelCall>[1]['block'];
+
+export interface DesignPart {
+  readonly key: string;
+  /** The Korean scope instruction for this part, built from what earlier parts produced. */
+  readonly instruction: (soFar: Rec) => string;
+}
+
+/** True when the pinned version of `family` declares a `part` variable. */
+export function declaresPart(ctx: WorkflowContext, family: string): boolean {
+  const id = ctx.promptSet.mapping[family];
+  if (!id) return false;
+  try {
+    return ctx.registry.get(id).input_variables.includes('part');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Part mode is an operator choice for providers with a response-time cap (`YEONJAE_DESIGN_PARTS=on`); the
+ * default makes one call per stage with an unrestricted scope.
+ */
+export function designPartsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.YEONJAE_DESIGN_PARTS === 'on';
+}
+
+const WHOLE_SCOPE = '범위 제한 없음. 모든 필드를 한 번에 설계한다.';
+
+const nameOf = (v: unknown): string | undefined => {
+  if (typeof v !== 'object' || v === null) return undefined;
+  const r = v as Rec;
+  for (const k of [
+    'display_name',
+    'name',
+    'term',
+    'attribute',
+    'statement',
+    'chapter_no',
+    'entity_name',
+    'title',
+  ])
+    if (typeof r[k] === 'string' || typeof r[k] === 'number') return `${k}:${String(r[k])}`;
+  return undefined;
+};
+
+/**
+ * Merge part outputs: arrays concatenate (a later item with the same identifying key replaces the earlier
+ * one, so a part may refine what it was shown), scalars and objects keep the first non-empty value.
+ */
+export function mergeParts(parts: readonly Rec[]): Rec {
+  const out: Rec = {};
+  for (const part of parts) {
+    for (const [k, v] of Object.entries(part)) {
+      if (Array.isArray(v)) {
+        const prev = Array.isArray(out[k]) ? (out[k] as unknown[]) : [];
+        const merged = [...prev];
+        for (const item of v) {
+          const key = nameOf(item);
+          const at = key === undefined ? -1 : merged.findIndex((x) => nameOf(x) === key);
+          if (at >= 0) merged[at] = item;
+          else merged.push(item);
+        }
+        out[k] = merged;
+      } else if (v !== undefined && v !== null && v !== '') {
+        const cur = out[k];
+        const empty =
+          cur === undefined ||
+          cur === null ||
+          cur === '' ||
+          (typeof cur === 'object' && !Array.isArray(cur) && Object.keys(cur).length === 0);
+        if (empty) out[k] = v;
+      }
+    }
+  }
+  return out;
+}
+
+export async function callInParts<T extends Rec>(
+  ctx: WorkflowContext,
+  input: {
+    readonly step: string;
+    readonly family: string;
+    readonly activityId: string;
+    readonly variables: Readonly<Record<string, string>>;
+    readonly block: Block;
+    readonly parts: readonly DesignPart[];
+  },
+): Promise<T> {
+  const declares = declaresPart(ctx, input.family);
+  if (!declares || !designPartsEnabled() || input.parts.length === 0) {
+    const call = await modelCall<T>(ctx, {
+      step: input.step,
+      family: input.family,
+      activityId: input.activityId,
+      variables: declares ? { ...input.variables, part: WHOLE_SCOPE } : input.variables,
+      block: input.block,
+    });
+    return call.output;
+  }
+  const outputs: Rec[] = [];
+  for (const part of input.parts) {
+    const call = await modelCall<Rec>(ctx, {
+      step: input.step,
+      family: input.family,
+      activityId: `${input.activityId}:part:${part.key}`,
+      variables: { ...input.variables, part: part.instruction(mergeParts(outputs)) },
+      block: input.block,
+    });
+    outputs.push(call.output);
+  }
+  return mergeParts(outputs) as T;
+}

@@ -958,10 +958,21 @@ export async function exportAccepted(
       canon_version: lookup.chapter.acceptedCanonVersion,
       words,
     });
+    // Korean manuscripts use the serial's own heading form, "N화. 제목" (ADR-0057).
+    const title =
+      v.language === 'ko'
+        ? (
+            await pool.query<{ title: string | null }>(
+              'SELECT title FROM chapters WHERE project_id = $1 AND number = $2',
+              [input.projectId, n],
+            )
+          ).rows[0]?.title
+        : undefined;
+    const heading = v.language === 'ko' ? `${n}화${title ? `. ${title}` : ''}` : `Chapter ${n}`;
     parts.push(
       format === 'markdown'
-        ? `## Chapter ${n}\n\n${v.text.trim()}\n`
-        : `Chapter ${n}\n\n${v.text.trim()}\n`,
+        ? `## ${heading}\n\n${v.text.trim()}\n`
+        : `${heading}\n\n${v.text.trim()}\n`,
     );
   }
   const head = input.title

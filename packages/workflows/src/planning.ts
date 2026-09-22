@@ -578,9 +578,10 @@ export async function generateContract(
         },
       };
       const chapterId = await ensureChapter(ctx, input.chapterNo);
+      // The planner's episode title when it wrote one (ADR-0057); the purpose otherwise.
       await ctx.pool.query('UPDATE chapters SET title = coalesce(title, $2) WHERE id = $1', [
         chapterId,
-        locked.purpose.slice(0, 80),
+        (locked.title ?? locked.purpose).slice(0, 80),
       ]);
       const ref = await saveArtifact(ctx, {
         step: 'chapter_contract',

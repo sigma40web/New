@@ -54,6 +54,7 @@ export function novelDepsFromEnv(
       gateway: new Gateway({
         providers: resolved.providers(),
         routing: resolved.routing,
+        roleRoutes: resolved.roleRoutes,
         budget: opts.shared ? new SharedBudget(pool) : new MemoryBudget(budgetCents),
         ...(opts.shared
           ? {

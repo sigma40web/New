@@ -1,0 +1,35 @@
+{
+  "family": "power_system_designer",
+  "version": "3.2.0",
+  "role": "power_system_designer",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.2.0.",
+  "style_sensitive": true,
+  "manuscript_producing": false,
+  "identity_variant": "planner_compact",
+  "model_class": "R",
+  "input_variables": [
+    "story_spec",
+    "concept",
+    "world_rules",
+    "part"
+  ],
+  "output_schema": null,
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.6,
+    "max_tokens": 6500,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "repair_then_regenerate",
+    "on_truncation": "fail",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.2.0 — part-scoped bible generation (ADR-0057): character_designer, world_builder, power_system_designer, story_architect and pacing_designer read a {{part}} scope and return only that part, so each call is bounded and later parts build on earlier ones; chapter_planner writes a Korean chapter title.",
+  "regression_cases": [
+    "power_system_designer.social_progression",
+    "power_system_designer.raw_design"
+  ],
+  "content_hash": "sha256:6fad971639d00c8e383dace13e4205288b2445e3d87112e3b537390a1abe5adc"
+}

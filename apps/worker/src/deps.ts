@@ -121,6 +121,7 @@ export function productionDeps(
         gateway: new Gateway({
           providers,
           routing,
+          roleRoutes: resolved.roleRoutes,
           budget: new MemoryBudget(budgetCents),
           metrics,
           audit,
@@ -132,6 +133,7 @@ export function productionDeps(
       gateway: new Gateway({
         providers,
         routing,
+        roleRoutes: resolved.roleRoutes,
         // The shared ledger, so two workers spending against one project see one another's spend.
         budget: new SharedBudget(pool),
         admission: new PgProviderAdmission(pool, { holder, maxWaitMs, metrics }),

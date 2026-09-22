@@ -3,6 +3,25 @@
 The single place that records implementation status (ADR-0043). Update it in every checkpoint commit.
 Everything else in `docs/` describes design; only this file claims what exists and what has run.
 
+## Checkpoint K3 — sequence audit, bounded bible calls, live 200-chapter run — 2026-09-22
+
+Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live`, stacked on K2. Steps 7–8; ADR-0057 records the decisions.
+
+- **Sequence audit (step 7):** `docs/08-delivery/13-korean-pipeline-sequence-audit.md` walks the pipeline stage by
+  stage (no stage reads a later output; every chapter stage reads only accepted canon) and lists the gaps: the
+  missing chapter rhythm and Korean prose measurement (closed in K2), missing episode titles and English export
+  headings (closed here), three registered-but-unused families, and two steps considered and not added.
+- **Chapter titles:** optional `chapter-contract.title`, written by `chapter_planner@3.2.0`; the chapter row and
+  Korean exports (`N화. 제목`) use it.
+- **Bounded bible calls:** with `YEONJAE_DESIGN_PARTS=on` the five bible families (v3.2.0, `part` variable) are
+  asked for checkpointed parts that each finish well inside a response-time cap and see earlier parts; merged
+  output is validated as before. Default remains one call per stage; older pinned jobs are unchanged.
+- **Per-role routes:** `YEONJAE_ROLE_MODELS` routes named roles (e.g. arc and chapter planners) to a model
+  regardless of class.
+- **Live-run finding that motivated both:** the operator's Genspark bridge sits behind a quick tunnel that
+  returns HTTP 524 for responses slower than about two minutes. A 116 s bible-model call succeeded; the first
+  full-cast call (~174 s) was lost with a 524.
+
 ## Checkpoint K2 — Korean-webnovel craft, pacing map, episode structure — 2026-09-22
 
 Branch `hoplite/gortyn-c23fe3a9--craft-pacing`, stacked on K1. Steps 4–6; ADR-0056 records the decision.

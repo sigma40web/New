@@ -1,0 +1,37 @@
+{
+  "family": "pacing_designer",
+  "version": "3.2.0",
+  "role": "pacing_designer",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.2.0.",
+  "style_sensitive": true,
+  "manuscript_producing": false,
+  "identity_variant": "planner_compact",
+  "model_class": "R",
+  "input_variables": [
+    "story_spec",
+    "blueprint",
+    "season",
+    "skeleton",
+    "bible_summary",
+    "target_chapters",
+    "part"
+  ],
+  "output_schema": null,
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.5,
+    "max_tokens": 16000,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "regenerate",
+    "on_truncation": "fail",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.2.0 — part-scoped bible generation (ADR-0057): character_designer, world_builder, power_system_designer, story_architect and pacing_designer read a {{part}} scope and return only that part, so each call is bounded and later parts build on earlier ones; chapter_planner writes a Korean chapter title.",
+  "regression_cases": [
+    "pacing_designer.fixture.smoke"
+  ],
+  "content_hash": "sha256:f83949bfeb60128b2edaf5edc8ebece21fbc56de3d2a1eb819c0f1b0522f5c33"
+}

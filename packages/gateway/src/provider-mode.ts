@@ -91,6 +91,41 @@ export interface ResolvedProviders {
   /** A fresh provider map per gateway; replay providers are stateful (misses/served), so a factory. */
   readonly providers: () => Map<string, Provider>;
   readonly routing: RoutingTable;
+  /** Per-role model overrides (`YEONJAE_ROLE_MODELS`, genspark mode). */
+  readonly roleRoutes?: Readonly<Record<string, readonly RouteEntry[]>> | undefined;
+}
+
+/**
+ * `YEONJAE_ROLE_MODELS="arc_planner=gemini-3.8-flash,chapter_planner=gemini-3.8-flash"` routes those roles to
+ * the named model on the genspark bridge regardless of their class. Unknown syntax is a startup error.
+ */
+export function gensparkRoleRoutes(
+  env: NodeJS.ProcessEnv = process.env,
+): Readonly<Record<string, readonly RouteEntry[]>> | undefined {
+  const raw = env.YEONJAE_ROLE_MODELS?.trim();
+  if (!raw) return undefined;
+  const out: Record<string, RouteEntry[]> = {};
+  for (const pair of raw
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)) {
+    const m = /^([a-z_]+)=([A-Za-z0-9._:-]+)$/.exec(pair);
+    if (!m?.[1] || !m[2])
+      throw new Error(`YEONJAE_ROLE_MODELS entry must look like role=model, got "${pair}"`);
+    out[m[1]] = [
+      {
+        modelId: m[2],
+        provider: 'genspark',
+        priority: 1,
+        family: m[2].split('-')[0] ?? 'genspark',
+        priceInPerMTokCents: 0,
+        priceOutPerMTokCents: 0,
+        maxContextTokens: 128_000,
+        supportsJsonSchema: true,
+      },
+    ];
+  }
+  return out;
 }
 
 /** Resolve providers and routing from the environment, validating the mode's configuration once. */
@@ -146,6 +181,7 @@ export function resolveProvidersFromEnv(
           ],
         ]),
       routing: gensparkRouting(env),
+      roleRoutes: gensparkRoleRoutes(env),
     };
   }
   const replayFile = env.YEONJAE_REPLAY_FILE;

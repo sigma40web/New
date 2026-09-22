@@ -212,6 +212,11 @@ export class MemoryBudget implements BudgetLedger {
 export interface GatewayOptions {
   readonly providers: ReadonlyMap<string, Provider>;
   readonly routing: RoutingTable;
+  /**
+   * Per-role route overrides (e.g. chapter-stage planners on a faster model than the bible designers that
+   * share their class). A role without an override uses its class routes.
+   */
+  readonly roleRoutes?: Readonly<Record<string, readonly RouteEntry[]>> | undefined;
   readonly budget: BudgetLedger;
   readonly audit: AuditStore;
   /**
@@ -315,8 +320,11 @@ export class Gateway {
     metrics.observe(name, METRIC_HELP[name] ?? '', seconds, safe);
   }
 
-  private routesFor(cls: ModelClass, excludeFamily?: string): RouteEntry[] {
-    const routes = [...this.opts.routing[cls]].sort((a, b) => a.priority - b.priority);
+  private routesFor(cls: ModelClass, excludeFamily?: string, role?: string): RouteEntry[] {
+    const override = role !== undefined ? this.opts.roleRoutes?.[role] : undefined;
+    const routes = [...(override ?? this.opts.routing[cls])].sort(
+      (a, b) => a.priority - b.priority,
+    );
     return excludeFamily ? routes.filter((r) => r.family !== excludeFamily) : routes;
   }
 
@@ -378,7 +386,7 @@ export class Gateway {
     const guard = guardRequest(req, this.opts.guardContext);
 
     // 2. route + budget reservation
-    const routes = this.routesFor(req.modelClass);
+    const routes = this.routesFor(req.modelClass, undefined, req.role);
     if (routes.length === 0)
       throw new GatewayError('PROVIDER_FAILED', `no route for model class ${req.modelClass}`);
     const params: ModelParams = { ...DEFAULT_PARAMS, ...(req.params ?? {}) };
