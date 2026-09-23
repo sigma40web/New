@@ -156,8 +156,14 @@ export function normalizeSceneDraft<T extends DraftLike>(raw: T): T {
     .filter((c) => typeof c.statement === 'string' && c.statement.trim().length > 0)
     .map((c) => (ids.has(c.paragraph_id) ? c : { ...c, paragraph_id: paragraphs[0]?.id ?? 'p1' }));
   const systemBlocks = (raw.system_blocks ?? []).filter((b) => ids.has(b.paragraph_id));
+  // Live models write their notes as a list; the schema holds one string.
+  const notes = Array.isArray(raw.writer_notes)
+    ? raw.writer_notes.filter((n): n is string => typeof n === 'string').join('\n')
+    : raw.writer_notes;
+  const { writer_notes: _notes, ...rest } = raw;
   return {
-    ...raw,
+    ...(rest as T),
+    ...(typeof notes === 'string' && notes.trim() ? { writer_notes: notes } : {}),
     language: raw.language ?? 'en',
     text: nfc.text,
     paragraphs,
