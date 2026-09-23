@@ -35,6 +35,13 @@ Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live`, stacked on K2. Steps 7–8
     cooldown reported ≈ 5 h). Nothing after the cast has been generated. Resume with `pnpm cli novel:resume
     <project> --stop-after=2` then `pnpm cli novel:run <project> --once` (bible), then `novel:run` (chapters 1–2)
     with the same environment; completed parts replay from their checkpoints.
+  - 2026-09-23, second quota window: world (3 parts) and power system (3 parts) completed; the blueprint was
+    rejected once because the heroine-arcs part filled `endgame_requirements` (not its field) with a blank
+    placeholder that merged into the core part's list. Parts now declare the fields they own and blank
+    placeholder items are dropped. A tunnel `ECONNRESET` then failed a whole step, because the gateway retries
+    only by moving to the next route and genspark mode had one; each genspark route now has one same-model
+    retry. The blueprint (4 seasons, 10 endgame requirements) and the season-1 pacing map completed; season 2
+    stopped on the same 5-hour limit after about 30 Opus calls in the window. Resume as above.
 
 ## Checkpoint K2 — Korean-webnovel craft, pacing map, episode structure — 2026-09-22
 
