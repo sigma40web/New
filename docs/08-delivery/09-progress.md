@@ -3,6 +3,26 @@
 The single place that records implementation status (ADR-0043). Update it in every checkpoint commit.
 Everything else in `docs/` describes design; only this file claims what exists and what has run.
 
+## Checkpoint K4 — compact chapter mode — 2026-09-23
+
+Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live--compact`, stacked on K3. ADR-0059 records the decision.
+
+- **Compact chapter mode (`YEONJAE_CHAPTER_MODE=compact`).** The scene plan is derived from the locked
+  contract as one whole-chapter scene (no scene-planner call; one writer call), and the seven evaluation calls
+  run concurrently as separate judges with separate gates. Default remains standard.
+- **Tests:** unit tests for the derived plan (schema-valid against the fixture contract, fallback without a
+  location) and the shared-call helper; the Korean end-to-end run is now exercised in both modes (compact: no
+  scene-planner call, one writer call per chapter, both chapters accepted).
+- Recorded-fixture suites (`chapter-production`, `novel`) replay exact prompts and therefore run in standard
+  mode only.
+- **Live, chapter 1 (Notion bridge):** evaluation in compact mode ran its seven calls concurrently (about 4
+  minutes instead of about 10 in sequence). A free-text `drift_flags` answer and a sentence-valued issue
+  `repair` from live judges failed scorecard validation; flags now map onto the enums and only structured
+  repair hints are kept. Chapter 1 stopped at the quality gate: round 0 passed prose, structure and genre but
+  failed voice (too little dialogue to judge register), and the round-1 prose patch scored worse on every
+  dimension, so the regression check refused it (`PATCH_REGRESSED`, needs attention). The round-0 draft is
+  the best version; it is not accepted.
+
 ## Checkpoint K3 — sequence audit, bounded bible calls, live 200-chapter run — 2026-09-22
 
 Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live`, stacked on K2. Steps 7–8; ADR-0057 records the decisions.

@@ -529,9 +529,11 @@ function scriptByRole(req: ProviderRequest) {
       const ch = Number(/chapter_contract:(\d+)|Chapter (\d+)/.exec(prompt)?.[2] ?? chapterNo);
       const pName = protagonist?.name ?? 'Seo Ji-an';
       const mName = mentor?.name ?? 'Baek Tae-ho';
-      const text = korean
-        ? sceneTextKo(ch, sceneNo, pName, mName)
-        : sceneText(ch, sceneNo, pName, mName);
+      const one = (n: number) =>
+        korean ? sceneTextKo(ch, n, pName, mName) : sceneText(ch, n, pName, mName);
+      // Compact mode (ADR-0059) asks for the whole chapter in one pass: the two scripted scenes together.
+      const whole = /회차 전체를 한 번에 쓴다|Write the whole chapter in one pass/.test(prompt);
+      const text = whole ? `${one(1)}\n\n${one(2)}` : one(sceneNo);
       // A live model: right text, sloppy offsets. Paragraph table deliberately wrong; claims fine.
       return json({
         scene_no: sceneNo,

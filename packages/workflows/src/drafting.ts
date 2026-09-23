@@ -25,6 +25,7 @@ import {
   saveArtifact,
   type WorkflowContext,
 } from './runtime.js';
+import { compactChapterMode, wholeChapterScene } from './compact-mode.js';
 
 export type ScenePlan = Generated.ScenePlanSchema.ScenePlan;
 export type SceneDraft = Generated.SceneDraftSchema.SceneDraftWriterOutputEnvelope;
@@ -193,6 +194,30 @@ export async function planScenes(
     ctx,
     'scene_plan',
     async () => {
+      const whole = compactChapterMode()
+        ? wholeChapterScene(input.contract, ctx.identity.outputLanguage.language ?? 'en')
+        : undefined;
+      if (whole) {
+        const v = validatorFor<ScenePlan>('scene-plan.schema.json')(whole);
+        if (!v.ok)
+          throw new WorkflowError(
+            'SCENE_PLAN_INVALID',
+            `compact scene plan: ${v.errors.map((e) => `${e.path} ${e.message}`).join('; ')}`,
+            { step: 'scene_plan', recommendedActions: ['regenerate'] },
+          );
+        const ref = await saveArtifact(ctx, {
+          step: 'scene_plan',
+          kind: 'scene_plan',
+          key: `${ch}:v${input.contract.version}`,
+          payload: {
+            chapter_no: ch,
+            contract_id: input.contract.id,
+            scenes: [v.value],
+            mode: 'compact',
+          },
+        });
+        return { scenes: [v.value], artifactId: ref.artifact_id };
+      }
       const call = await modelCall<{ scenes?: unknown }>(ctx, {
         step: 'scene_plan',
         family: 'scene_planner',
