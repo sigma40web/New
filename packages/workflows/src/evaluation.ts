@@ -95,7 +95,8 @@ function toIssue(
     ...(raw.chapter_span
       ? { chapter_span: { ...raw.chapter_span, manuscript_version_id: versionId } }
       : {}),
-    ...(raw.repair ? { repair: raw.repair } : {}),
+    // Only a structured repair hint is kept; live checkers sometimes write it as a sentence.
+    ...(raw.repair && typeof raw.repair === 'object' ? { repair: raw.repair } : {}),
     ...(raw.conflicting_canon ? { conflicting_canon: raw.conflicting_canon } : {}),
     ...(raw.canon_evidence ? { canon_evidence: raw.canon_evidence } : {}),
     ...(raw.metric ? { metric: raw.metric } : {}),
@@ -608,13 +609,13 @@ export async function evaluateVersion(
         sections: {
           prose: section('prose', proseScore, dimensionPassed('prose'), {
             judge_score: proseScore,
-            drift_flags: prose.output.drift_flags ?? [],
+            drift_flags: driftFlags(prose.output.drift_flags, PROSE_DRIFT),
             dimension_scores: likertScores(prose.output.dimension_scores),
             evaluator_call_id: prose.llmCallId,
           }),
           structure: section('structure', structureScore, dimensionPassed('structure'), {
             judge_score: structureScore,
-            drift_flags: structure.output.drift_flags ?? [],
+            drift_flags: driftFlags(structure.output.drift_flags, STRUCTURE_DRIFT),
             dimension_scores: likertScores(structure.output.dimension_scores),
             ...(structure.output.hook_sentence_index !== undefined
               ? { hook_sentence_index: structure.output.hook_sentence_index }
@@ -740,4 +741,35 @@ export function likertScores(raw: Record<string, unknown> | undefined): Record<s
     out[k] = Math.round(Math.min(5, Math.max(1, scaled)) * 10) / 10;
   }
   return out;
+}
+
+const PROSE_DRIFT: Readonly<Record<string, RegExp>> = {
+  translation_like: /translation|번역/i,
+  literary: /literary|문학|수필|서구|western/i,
+  light_novel: /light.?novel|라노벨|라이트 ?노벨/i,
+  format: /format|형식|마크다운|markdown/i,
+};
+const STRUCTURE_DRIFT: Readonly<Record<string, RegExp>> = {
+  western_novel: /western|서구|서양/i,
+  serial: /serial|연재|절단|훅|hook/i,
+  exposition: /exposition|설명|정보 ?덤프|info.?dump/i,
+  cadence: /cadence|리듬|호흡|템포|pacing|페이스/i,
+};
+
+/**
+ * The prose and structure drift flags are enums. The Korean judge prompts show a free-text example
+ * (`["..."]`), so live judges write sentences; each maps to the enum values its wording names, and a
+ * sentence naming none is dropped (the judge's issues keep the text).
+ */
+export function driftFlags(
+  raw: readonly unknown[] | undefined,
+  allowed: Readonly<Record<string, RegExp>>,
+): string[] {
+  const out = new Set<string>();
+  for (const f of raw ?? []) {
+    if (typeof f !== 'string') continue;
+    if (f in allowed) out.add(f);
+    else for (const [flag, re] of Object.entries(allowed)) if (re.test(f)) out.add(flag);
+  }
+  return [...out];
 }
