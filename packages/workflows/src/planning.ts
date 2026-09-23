@@ -522,6 +522,13 @@ export async function generateContract(
         id: input.contractId,
         project_id: ctx.projectId,
         chapter_number: input.chapterNo,
+        // The prompt tells the model the workflow fills `version`; a model that obeys omits it.
+        version:
+          typeof content.version === 'number' &&
+          Number.isInteger(content.version) &&
+          content.version >= 1
+            ? content.version
+            : 1,
         arc_id: input.arcPlan.id,
         season_id: input.arcPlan.season_id,
         timeline_id: input.mainTimelineId,
