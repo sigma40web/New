@@ -22,6 +22,12 @@ export interface DesignPart {
   readonly instruction: (soFar: Rec) => string;
   /** Output budget for this part in characters (default 3,500). */
   readonly budgetChars?: number | undefined;
+  /**
+   * Fields this part is responsible for. A field owned by some part is taken only from its owner: live
+   * models fill fields they were told to leave empty with placeholders (`{"statement": ""}`), which would
+   * otherwise merge into the owner's list. Fields no part owns merge from any part.
+   */
+  readonly fields?: readonly string[] | undefined;
 }
 
 // Measured on the live bridge: an unbounded single-character part ran past the tunnel's ~2-minute cap,
@@ -66,9 +72,34 @@ const nameOf = (v: unknown): string | undefined => {
   return undefined;
 };
 
+const PLACEHOLDER_KEYS = new Set(['id', 'kind', 'type']);
+
+/** An object item with no authored text or numbers besides its id/kind — a model's schema filler. */
+export function isPlaceholderItem(v: unknown): boolean {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  return Object.entries(v as Rec).every(
+    ([k, x]) =>
+      PLACEHOLDER_KEYS.has(k) ||
+      x === null ||
+      x === undefined ||
+      (typeof x === 'string' && x.trim() === '') ||
+      (Array.isArray(x) && x.length === 0),
+  );
+}
+
+/** Keep only the fields `part` may contribute: its own, and those no part owns. */
+export function scopeToPart(output: Rec, part: DesignPart, parts: readonly DesignPart[]): Rec {
+  const owned = new Set(parts.flatMap((p) => p.fields ?? []));
+  if (owned.size === 0) return output;
+  return Object.fromEntries(
+    Object.entries(output).filter(([k]) => part.fields?.includes(k) === true || !owned.has(k)),
+  );
+}
+
 /**
  * Merge part outputs: arrays concatenate (a later item with the same identifying key replaces the earlier
- * one, so a part may refine what it was shown), scalars and objects keep the first non-empty value.
+ * one, so a part may refine what it was shown; placeholder items are dropped), scalars and objects keep
+ * the first non-empty value.
  */
 export function mergeParts(parts: readonly Rec[]): Rec {
   const out: Rec = {};
@@ -78,6 +109,7 @@ export function mergeParts(parts: readonly Rec[]): Rec {
         const prev = Array.isArray(out[k]) ? (out[k] as unknown[]) : [];
         const merged = [...prev];
         for (const item of v) {
+          if (isPlaceholderItem(item)) continue;
           const key = nameOf(item);
           const at = key === undefined ? -1 : merged.findIndex((x) => nameOf(x) === key);
           if (at >= 0) merged[at] = item;
@@ -148,7 +180,7 @@ export async function callInParts<T extends Rec>(
       },
       block: input.block,
     });
-    outputs.push(call.output);
+    outputs.push(scopeToPart(call.output, part, input.parts));
   }
   return stripNulls(mergeParts(outputs)) as T;
 }

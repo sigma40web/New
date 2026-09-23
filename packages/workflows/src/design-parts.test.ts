@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { designPartsEnabled, mergeParts, stripNulls } from './design-parts.js';
+import {
+  type DesignPart,
+  designPartsEnabled,
+  isPlaceholderItem,
+  mergeParts,
+  scopeToPart,
+  stripNulls,
+} from './design-parts.js';
 
 describe('part-scoped design calls (ADR-0057)', () => {
   it('concatenates arrays across parts and lets a later part refine an item with the same key', () => {
@@ -52,6 +59,47 @@ describe('part-scoped design calls (ADR-0057)', () => {
     ).toEqual({
       characters: [{ display_name: '벨리알' }, null],
     });
+  });
+
+  it('takes an owned field only from its owner part (live placeholder filler)', () => {
+    // Recorded live: the heroine-arcs part returned endgame_requirements: [{ id: 'EG-0', statement: '' }].
+    const corePart: DesignPart = {
+      key: 'core',
+      fields: ['ending', 'endgame_requirements'],
+      instruction: () => '',
+    };
+    const arcsPart: DesignPart = { key: 'arcs', fields: ['character_arcs'], instruction: () => '' };
+    const parts = [corePart, arcsPart];
+    const core = {
+      ending: { summary: '재봉인' },
+      endgame_requirements: [{ id: 'EG-1', statement: '봉인' }],
+    };
+    const arcs = {
+      ending: { summary: '다른 결말' },
+      endgame_requirements: [{ id: 'EG-0', kind: 'fact', statement: '봉인 해제' }],
+      character_arcs: [{ entity_name: '엘리제' }],
+      mysteries: [{ statement: '금서고' }],
+    };
+    const merged = mergeParts([
+      scopeToPart(core, corePart, parts),
+      scopeToPart(arcs, arcsPart, parts),
+    ]);
+    expect(merged.endgame_requirements).toEqual([{ id: 'EG-1', statement: '봉인' }]);
+    expect(merged.ending).toEqual({ summary: '재봉인' });
+    expect(merged.character_arcs).toEqual([{ entity_name: '엘리제' }]);
+    // A field no part owns still merges from whichever part wrote it.
+    expect(merged.mysteries).toEqual([{ statement: '금서고' }]);
+  });
+
+  it('drops placeholder array items that carry no authored content', () => {
+    expect(isPlaceholderItem({ id: 'EG-0', kind: 'fact', statement: '' })).toBe(true);
+    expect(isPlaceholderItem({ id: 'EG-0', statement: '봉인' })).toBe(false);
+    expect(isPlaceholderItem({ chapter_no: 3 })).toBe(false);
+    const merged = mergeParts([
+      { characters: [{ display_name: '카일' }] },
+      { characters: [{ display_name: '', goals: [] }] },
+    ]);
+    expect(merged.characters).toEqual([{ display_name: '카일' }]);
   });
 
   it('is an explicit operator choice', () => {

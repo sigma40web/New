@@ -573,16 +573,19 @@ export async function buildFullBible(
         parts: [
           {
             key: 'rules',
+            fields: ['world_rules'],
             instruction: () =>
               '이번 호출에서는 world_rules만 설계한다(8~14개). locations, organizations, terminology는 빈 배열로 둔다.',
           },
           {
             key: 'organizations',
+            fields: ['organizations'],
             instruction: (soFar) =>
               `이번 호출에서는 organizations만 설계한다. 다른 배열은 빈 배열로 둔다. 이미 확정된 세계 규칙: ${listed(soFar, 'world_rules', 'statement')}.`,
           },
           {
             key: 'places',
+            fields: ['locations', 'terminology'],
             instruction: (soFar) =>
               `이번 호출에서는 locations와 terminology만 설계한다. world_rules와 organizations는 빈 배열로 둔다. 이미 확정된 조직: ${listed(soFar, 'organizations', 'display_name')}.`,
           },
@@ -633,16 +636,19 @@ export async function buildFullBible(
           parts: [
             {
               key: 'rules',
+              fields: ['system_rules', 'ranks'],
               instruction: () =>
                 '이번 호출에서는 system_rules와 ranks만 설계한다. abilities와 milestones는 빈 배열로 둔다.',
             },
             {
               key: 'abilities',
+              fields: ['abilities'],
               instruction: (soFar) =>
                 `이번 호출에서는 abilities만 설계한다. 다른 배열은 빈 배열로 둔다. 이미 확정된 등급: ${listed(soFar, 'ranks', 'name')}.`,
             },
             {
               key: 'milestones',
+              fields: ['milestones'],
               instruction: (soFar) =>
                 `이번 호출에서는 milestones만 설계한다. 다른 배열은 빈 배열로 둔다. 전체 ${intake.target_chapters}화에 고르게 퍼뜨린다. 이미 확정된 등급: ${listed(soFar, 'ranks', 'name')}.`,
             },
@@ -981,31 +987,45 @@ export async function buildFullBible(
           parts: [
             {
               key: 'core',
+              fields: [
+                'story_promise',
+                'reader_fantasy',
+                'main_conflict',
+                'themes',
+                'protagonist_arc',
+                'ending',
+                'endgame_requirements',
+              ],
               instruction: () =>
                 'story_promise, reader_fantasy, main_conflict, protagonist_arc, ending, endgame_requirements만 작성한다. seasons, character_arcs, promises는 빈 배열로 두고 progression_arc는 생략한다.',
             },
             {
               key: 'seasons',
+              fields: ['seasons', 'progression_arc'],
               instruction: () =>
                 'seasons와 progression_arc만 작성한다. 다른 배열은 빈 배열로 둔다. 시즌은 목표 회차 수 전체를 빈틈없이 덮는다.',
             },
             {
               key: 'character-arcs-heroines',
+              fields: ['character_arcs'],
               instruction: (soFar) =>
                 `character_arcs만 작성한다: 히로인과 연애 상대 전원. 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
             },
             {
               key: 'character-arcs-others',
+              fields: ['character_arcs'],
               instruction: (soFar) =>
                 `character_arcs만 작성한다: 히로인이 아닌 주요 인물 3~4명(적대자, 원작 주인공, 조력자). 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
             },
             {
               key: 'promises-early',
+              fields: ['promises'],
               instruction: (soFar) =>
                 `promises만 작성한다: 앞쪽 두 시즌에 심는 떡밥·미스터리·관계 비트 8~14개. 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
             },
             {
               key: 'promises-late',
+              fields: ['promises'],
               instruction: (soFar) =>
                 `promises만 작성한다: 뒤쪽 시즌에 심거나 크게 회수되는 떡밥·미스터리·관계 비트 8~14개. 앞서 확정된 약속과 겹치지 않게 한다. 다른 배열은 빈 배열로 둔다. 이미 확정된 시즌: ${seasonsOf(soFar)}.`,
             },
@@ -1158,6 +1178,7 @@ export async function buildFullBible(
           const windows: DesignPart[] = [
             {
               key: 'arcs',
+              fields: ['arcs'],
               instruction: () =>
                 '이번 호출에서는 이 시즌의 arcs만 설계한다. chapters는 빈 배열로 둔다.',
             },
@@ -1166,6 +1187,7 @@ export async function buildFullBible(
             const to = Math.min(window.to, from + 14);
             windows.push({
               key: `ch${from}-${to}`,
+              fields: ['chapters'],
               instruction: (soFar) => {
                 const arcs = Array.isArray(soFar.arcs)
                   ? (soFar.arcs as Record<string, unknown>[])
