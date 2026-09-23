@@ -436,6 +436,7 @@ export async function produceChapter(
         // Only the model-driven path renders the registry into the planner prompt; the fixture path keeps
         // its recorded prompt text byte-identical.
         ...(input.blueprint ? { bible: input.bible } : {}),
+        ...(input.blueprint?.pacing ? { pacing: input.blueprint.pacing } : {}),
       },
       knownProps,
       knownEntities,

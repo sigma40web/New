@@ -21,6 +21,7 @@ import {
   toNfcText,
 } from '@yeonjae/prose';
 import { WorkflowError } from './errors.js';
+import { koreanProseLint, renderKoLint } from './ko-lint.js';
 import { checkpointPack, packCallInput } from './drafting.js';
 import { type ChapterContract, type StorySpec, compileFor } from './planning.js';
 import { modelCall, runStep, saveArtifact, type WorkflowContext } from './runtime.js';
@@ -446,7 +447,7 @@ export async function evaluateVersion(
           chapter_text: chapterText,
           prose_lint_report:
             ctx.identity.outputLanguage.language === 'ko'
-              ? `한국어 출력 언어 검사: 신뢰도 ${det.output_language.english_confidence}; 분량 ${det.length.count}${det.length.unit === 'characters' ? '자' : ` ${det.length.unit}`}.`
+              ? `한국어 출력 언어 검사: 신뢰도 ${det.output_language.english_confidence}; 분량 ${det.length.count}${det.length.unit === 'characters' ? '자' : ` ${det.length.unit}`}.\n${renderKoLint(koreanProseLint(v.text))}`
               : `English output-language check: confidence ${det.output_language.english_confidence}; length ${det.length.count} ${det.length.unit}.`,
         },
         block: compileFor(ctx, 'judge_rubric_prose'),

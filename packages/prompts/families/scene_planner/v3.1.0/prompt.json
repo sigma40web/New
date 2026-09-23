@@ -1,0 +1,33 @@
+{
+  "family": "scene_planner",
+  "version": "3.1.0",
+  "role": "scene_planner",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.1.0.",
+  "style_sensitive": true,
+  "manuscript_producing": false,
+  "identity_variant": "planner_compact",
+  "model_class": "M",
+  "input_variables": [
+    "chapter_contract",
+    "register_digests",
+    "previous_chapter_tail"
+  ],
+  "output_schema": null,
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.5,
+    "max_tokens": 4000,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "repair_then_regenerate",
+    "on_truncation": "fail",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.1.0 — Korean-webnovel craft (ADR-0056): series pacing principles and the per-season pacing map (new pacing_designer family; arc_planner reads the arc rhythm, chapter_planner reads the chapter's rhythm position), episode shape and POV discipline for planners, and a concrete Korean-webnovel style guide (paragraph and beat rhythm, inner voice, system lines, anti-translationese and anti-Western-slop lists) for the writer, reviser, assembler and judges.",
+  "regression_cases": [
+    "scene_planner.fixture.smoke"
+  ],
+  "content_hash": "sha256:6dfcfbff75a84efe264e9645e2cc4832acd3aa8cad849d3d8b9071054277ba06"
+}

@@ -47,6 +47,17 @@ Validation: every user mandatory scene is bound to a season/arc; every forbidden
 `must_not` inherited by all contracts; ending preference realized in `ending`; endgame requirements each
 have at least one planned path (arc) that produces them.
 
+### 3.1 Pacing map (ADR-0056)
+
+After the blueprint, `pacing_designer` designs each season as arcs of 8–30 chapters and assigns every chapter a
+rhythm slot: role (hook, setup, daily, buildup, foreshadow, incident, confrontation, climax, aftermath, reward,
+relationship, twist, rest), tension 1–10, one core beat, thread, payoff, frustration flag, hook type and
+relationship focus. A deterministic skeleton suggests arc boundaries and a sawtooth tension curve. The workflow
+validates coverage, contiguous arcs, a climax per arc, frustration streaks, payoff gaps, tension plateaus and a
+slow opening for long serials, and rejects (regenerates) a plan that breaks them. The merged map is stored as
+`series-blueprint.pacing`; arc plans are scheduled per pacing arc, the arc planner reads the arc's rhythm table
+and the chapter planner reads the chapter's rhythm position, so no chapter has to invent its own event.
+
 ## 4. Season & Arc plans (schema: `arc-plan.schema.json`)
 
 Season: objective, thesis, entry state (reference to canon at a chapter), exit state (assertions),

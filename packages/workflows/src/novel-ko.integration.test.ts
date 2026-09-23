@@ -114,7 +114,12 @@ run('Korean novel run: intake → bible → chapters, prompts in Korean (simulat
       expect(r.system).not.toMatch(/Output-Language Contract/);
       expect(`${r.system}\n${r.user}`).toMatch(/회차 계약/);
     }
+    // The bible carries a pacing map (ADR-0056); arc and chapter planners read their rhythm from it.
+    expect(seen.some((r) => r.trace?.role === 'pacing_designer')).toBe(true);
+    const arcPlanner = seen.find((r) => r.trace?.role === 'arc_planner');
+    expect(arcPlanner?.user).toMatch(/회차별 리듬/);
     const planner = seen.filter((r) => r.trace?.role === 'chapter_planner');
+    expect(planner.map((r) => /이번 회차: (\d+)화/.exec(r.user)?.[1])).toEqual(['1', '2']);
     for (const r of planner) {
       expect(r.user).toMatch(/하드 요구사항/);
       expect(r.user).not.toMatch(/Use ONLY the entity ids above/);

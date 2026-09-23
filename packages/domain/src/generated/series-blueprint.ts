@@ -131,6 +131,127 @@ export interface SeriesBlueprint {
      */
     bound_to: string;
   }[];
+  /**
+   * Pacing map (ADR-0056): arcs of 8–30 chapters and one rhythm slot per chapter, produced per season by pacing_designer and validated by the workflow.
+   */
+  pacing?: {
+    /**
+     * @minItems 1
+     */
+    arcs: [
+      {
+        ordinal: number;
+        season_ordinal: number;
+        title: string;
+        kind:
+          | 'introduction'
+          | 'daily'
+          | 'incident'
+          | 'exam'
+          | 'tournament'
+          | 'dungeon'
+          | 'conflict'
+          | 'romance'
+          | 'mystery'
+          | 'war'
+          | 'climax';
+        from: number;
+        to: number;
+        purpose: string;
+        climax_chapter: number;
+        focus_characters: string[];
+      },
+      ...{
+        ordinal: number;
+        season_ordinal: number;
+        title: string;
+        kind:
+          | 'introduction'
+          | 'daily'
+          | 'incident'
+          | 'exam'
+          | 'tournament'
+          | 'dungeon'
+          | 'conflict'
+          | 'romance'
+          | 'mystery'
+          | 'war'
+          | 'climax';
+        from: number;
+        to: number;
+        purpose: string;
+        climax_chapter: number;
+        focus_characters: string[];
+      }[],
+    ];
+    /**
+     * @minItems 1
+     */
+    chapters: [
+      {
+        chapter_no: number;
+        arc_ordinal: number;
+        role:
+          | 'hook'
+          | 'setup'
+          | 'daily'
+          | 'buildup'
+          | 'foreshadow'
+          | 'incident'
+          | 'confrontation'
+          | 'climax'
+          | 'aftermath'
+          | 'reward'
+          | 'relationship'
+          | 'twist'
+          | 'rest';
+        tension: number;
+        beat: string;
+        thread: 'main' | 'growth' | 'romance' | 'mystery' | 'rival' | 'daily' | 'world';
+        payoff: 'cider' | 'reveal' | 'emotion' | 'growth' | 'humor' | 'none';
+        frustration: boolean;
+        hook:
+          | 'cliffhanger'
+          | 'reveal'
+          | 'decision'
+          | 'arrival_of_threat'
+          | 'emotional_peak'
+          | 'quiet_ominous';
+        focus_character?: string;
+      },
+      ...{
+        chapter_no: number;
+        arc_ordinal: number;
+        role:
+          | 'hook'
+          | 'setup'
+          | 'daily'
+          | 'buildup'
+          | 'foreshadow'
+          | 'incident'
+          | 'confrontation'
+          | 'climax'
+          | 'aftermath'
+          | 'reward'
+          | 'relationship'
+          | 'twist'
+          | 'rest';
+        tension: number;
+        beat: string;
+        thread: 'main' | 'growth' | 'romance' | 'mystery' | 'rival' | 'daily' | 'world';
+        payoff: 'cider' | 'reveal' | 'emotion' | 'growth' | 'humor' | 'none';
+        frustration: boolean;
+        hook:
+          | 'cliffhanger'
+          | 'reveal'
+          | 'decision'
+          | 'arrival_of_threat'
+          | 'emotional_peak'
+          | 'quiet_ominous';
+        focus_character?: string;
+      }[],
+    ];
+  };
 }
 /**
  * Pinned input versions for reproducibility.

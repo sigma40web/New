@@ -1,0 +1,40 @@
+{
+  "family": "chapter_planner",
+  "version": "3.1.0",
+  "role": "chapter_planner",
+  "purpose": "Korean manuscript-language prompt, fully Korean surface (ADR-0055), 3.1.0.",
+  "style_sensitive": true,
+  "manuscript_producing": false,
+  "identity_variant": "planner_compact",
+  "model_class": "R",
+  "input_variables": [
+    "arc_plan",
+    "chapter_number",
+    "rhythm_position",
+    "previous_chapter_summary",
+    "canon_state",
+    "knowledge_state",
+    "open_promises",
+    "active_constraints",
+    "length_target_words"
+  ],
+  "output_schema": "chapter-contract.schema.json",
+  "output_mode": "json",
+  "params": {
+    "temperature": 0.4,
+    "max_tokens": 6000,
+    "top_p": 1
+  },
+  "failure_behavior": {
+    "on_schema_invalid": "repair_then_regenerate",
+    "on_truncation": "fail",
+    "max_attempts": 2
+  },
+  "status": "active",
+  "changelog": "3.1.0 — Korean-webnovel craft (ADR-0056): series pacing principles and the per-season pacing map (new pacing_designer family; arc_planner reads the arc rhythm, chapter_planner reads the chapter's rhythm position), episode shape and POV discipline for planners, and a concrete Korean-webnovel style guide (paragraph and beat rhythm, inner voice, system lines, anti-translationese and anti-Western-slop lists) for the writer, reviser, assembler and judges.",
+  "regression_cases": [
+    "chapter_planner.full_planned_bible",
+    "chapter_planner.ending_continuity"
+  ],
+  "content_hash": "sha256:ee8dcac61089fe90e21fdb9c50485febaa01399150b6abde437b1042d6b16b16"
+}

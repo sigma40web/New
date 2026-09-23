@@ -620,6 +620,42 @@ function scriptByRole(req: ProviderRequest) {
       });
     case 'assumption_explainer':
       return json({ explanations: [] });
+    case 'pacing_designer': {
+      // One arc per season with a buildup → climax → aftermath shape and a payoff every other chapter.
+      const w = /\((\d+)~(\d+)화\)/.exec(req.user);
+      const from = Number(w?.[1] ?? 1);
+      const to = Number(w?.[2] ?? from);
+      const climax = Math.max(from, to - (to - from >= 2 ? 1 : 0));
+      const chapters = [];
+      for (let n = from; n <= to; n++)
+        chapters.push({
+          chapter_no: n,
+          role:
+            n === climax ? 'climax' : n > climax ? 'aftermath' : n === from ? 'hook' : 'buildup',
+          tension: n === climax ? 8 : 4,
+          beat: `The ledger beat of chapter ${n}.`,
+          thread: 'main',
+          payoff: (n - from) % 2 === 0 || n === climax ? 'cider' : 'none',
+          frustration: false,
+          hook: 'cliffhanger',
+          focus_character: '',
+        });
+      return json({
+        arcs: [
+          {
+            ordinal: 1,
+            title: 'Ghost Payroll',
+            kind: 'incident',
+            from,
+            to,
+            purpose: 'Prove the forged ledgers.',
+            climax_chapter: climax,
+            focus_characters: [],
+          },
+        ],
+        chapters,
+      });
+    }
     default:
       return undefined;
   }

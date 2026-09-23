@@ -62,5 +62,7 @@
 
 | [0055](0055-fully-korean-prompt-surface.md) | A Korean project's whole prompt surface is Korean: identity block, Korean-authored layers, context packs, Active Constraint Set and v3 prompt families |
 
+| [0056](0056-pacing-map-and-korean-webnovel-craft.md) | The bible carries a validated chapter-by-chapter pacing map; planners read arc rhythm and chapter rhythm position; writers get explicit Korean-webnovel craft rules and a deterministic Korean prose lint |
+
 New ADRs: copy `0000-adr-template.md`, take the next number, link it here, and update the traceability
 matrix in the same change.
