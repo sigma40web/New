@@ -50,6 +50,7 @@ import {
   type SeasonWindow,
 } from './pacing.js';
 import { WorkflowError } from './errors.js';
+import { normalizeArcSelfChecks } from './plan-normalize.js';
 import { assertDesignOutput } from './design-output.js';
 import { composedRefFor, loadIntoStore } from './identity-from-intake.js';
 import {
@@ -1401,7 +1402,7 @@ export async function planArcFromBlueprint(
       });
       const known = new Set(input.bible.entities.map((e) => e.id));
       const promiseIds = new Set(input.bible.promises.map((p) => p.id));
-      const raw = call.output;
+      const raw = normalizeArcSelfChecks(call.output) as Partial<ArcPlan>;
       const onlyKnown = (ids: unknown): string[] =>
         Array.isArray(ids) ? ids.filter((x): x is string => isString(x) && known.has(x)) : [];
       const onlyPromises = (ids: unknown): string[] =>

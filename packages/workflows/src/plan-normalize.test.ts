@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { validatorFor } from '@yeonjae/domain';
-import { normalizeContractOutput, normalizeScenePlans } from './plan-normalize.js';
+import {
+  normalizeArcSelfChecks,
+  normalizeContractOutput,
+  normalizeScenePlans,
+} from './plan-normalize.js';
 import { type ChapterContract } from './planning.js';
 
 const MC = '0190b3a0-0000-7000-8000-000000000001';
@@ -149,5 +153,34 @@ describe('live planner output normalization', () => {
       0,
     );
     expect(total).toBe(5500);
+  });
+});
+
+describe('arc planner self-checks', () => {
+  it('turns the prompt-shaped prose repetition_check into notes (recorded live output)', () => {
+    const out = normalizeArcSelfChecks({
+      title: '빙의, 그리고 3개월의 시한부',
+      repetition_check: '이전 아크가 없는 도입부 아크로서 고유의 훅을 확립함.',
+      cadence_check: { cider_interval_ok: true, notes: ['사이다 비트: 3화, 7화, 11화'], extra: 1 },
+    });
+    expect(out.repetition_check).toEqual({
+      notes: '이전 아크가 없는 도입부 아크로서 고유의 훅을 확립함.',
+    });
+    expect(out.cadence_check).toEqual({
+      cider_interval_ok: true,
+      notes: ['사이다 비트: 3화, 7화, 11화'],
+    });
+    expect(out.title).toBe('빙의, 그리고 3개월의 시한부');
+  });
+
+  it('keeps a well-formed object, drops ungrounded ids, and drops unreadable values', () => {
+    const id = '0190f0a0-0000-7000-8000-000000000001';
+    expect(
+      normalizeArcSelfChecks({
+        repetition_check: { compared_arc_ids: [id, '아크 1'], similarity_score: 1.4, notes: 'ok' },
+      }).repetition_check,
+    ).toEqual({ compared_arc_ids: [id], similarity_score: 1, notes: 'ok' });
+    const dropped = normalizeArcSelfChecks({ repetition_check: 3, cadence_check: null });
+    expect('repetition_check' in dropped || 'cadence_check' in dropped).toBe(false);
   });
 });

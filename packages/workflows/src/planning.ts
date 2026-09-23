@@ -708,9 +708,35 @@ export function renderBibleState(
 
 export function renderBibleDesign(b: StoryBible, lang: 'en' | 'ko' = 'en'): string {
   if (!b.design) return '';
+  const design = compactDesign(b.design);
   return lang === 'ko'
-    ? `[PLANNED — 완성된 스토리 설계, 아직 일어난 사건이 아님]\n${JSON.stringify(b.design)}\n아래 등록부 id를 쓴다. 정사로 확정된 내용이 계획된 전개보다 우선하고, 비밀은 공개된 지식이 아니다.`
-    : `[PLANNED — COMPLETE STORY DESIGN, NOT REALIZED EVENTS]\n${JSON.stringify(b.design)}\nUse registry IDs below. Accepted canon takes precedence over intended developments; secrets are not public knowledge.`;
+    ? `[PLANNED — 완성된 스토리 설계, 아직 일어난 사건이 아님]\n${design}\n아래 등록부 id를 쓴다. 정사로 확정된 내용이 계획된 전개보다 우선하고, 비밀은 공개된 지식이 아니다.`
+    : `[PLANNED — COMPLETE STORY DESIGN, NOT REALIZED EVENTS]\n${design}\nUse registry IDs below. Accepted canon takes precedence over intended developments; secrets are not public knowledge.`;
+}
+
+// Rendered elsewhere (propositions are listed with their ids) or of no use to a planner.
+const DESIGN_OMIT = new Set(['propositions', 'english', 'decision', 'aliases', 'short_forms']);
+
+/**
+ * The design as unquoted `key: value` text without empty fields. A live 200-chapter design is ~50k
+ * characters as JSON; in every chapter prompt that exceeded a provider's input cap (measured on the
+ * Notion bridge), and a quarter of it was quoting and repeated propositions.
+ */
+export function compactDesign(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(compactDesign).join(', ')}]`;
+  if (typeof value === 'object' && value !== null)
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(
+        ([k, v]) =>
+          !DESIGN_OMIT.has(k) &&
+          v !== null &&
+          v !== undefined &&
+          v !== '' &&
+          !(Array.isArray(v) && v.length === 0),
+      )
+      .map(([k, v]) => `${k}: ${compactDesign(v)}`)
+      .join('; ')}}`;
+  return String(value);
 }
 
 function renderKnowledge(b: StoryBible, lang: 'en' | 'ko' = 'en'): string {

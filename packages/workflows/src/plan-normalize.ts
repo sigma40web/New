@@ -594,3 +594,49 @@ export function normalizeScenePlans(raw: unknown, input: ScenePlanNormalizeInput
     };
   });
 }
+
+/**
+ * The arc planner's self-report fields. The Korean arc_planner prompts (3.0.0–3.2.0) show
+ * `"repetition_check": "..."` in their example although the schema wants an object, so live output
+ * carries prose there; prose becomes `notes`. Anything else that cannot be read is dropped (both fields
+ * are optional).
+ */
+export function normalizeArcSelfChecks(raw: Rec): Rec {
+  const out: Rec = { ...raw };
+  const rep = raw.repetition_check;
+  delete out.repetition_check;
+  if (str(rep)) out.repetition_check = { notes: str(rep) };
+  else if (isRec(rep)) {
+    const ids = arr(rep.compared_arc_ids).filter(
+      (x): x is string => typeof x === 'string' && UUID.test(x),
+    );
+    out.repetition_check = {
+      ...(ids.length ? { compared_arc_ids: ids } : {}),
+      ...(typeof rep.similarity_score === 'number'
+        ? { similarity_score: clamp01(rep.similarity_score, 0) }
+        : {}),
+      ...(str(rep.notes) ? { notes: str(rep.notes) } : {}),
+    };
+  }
+  const cad = raw.cadence_check;
+  delete out.cadence_check;
+  const notes = (v: unknown) =>
+    arr(v)
+      .map(str)
+      .filter((x): x is string => x !== undefined);
+  if (str(cad) || Array.isArray(cad)) out.cadence_check = { notes: notes(cad) };
+  else if (isRec(cad)) {
+    const flags = [
+      'cider_interval_ok',
+      'progression_interval_ok',
+      'frustration_streak_ok',
+    ] as const;
+    out.cadence_check = {
+      ...Object.fromEntries(
+        flags.filter((f) => typeof cad[f] === 'boolean').map((f) => [f, cad[f]]),
+      ),
+      ...(cad.notes !== undefined ? { notes: notes(cad.notes) } : {}),
+    };
+  }
+  return out;
+}

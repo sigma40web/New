@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { validateContract } from './planning.js';
+import { compactDesign, validateContract } from './planning.js';
 
 const CONTRACT = JSON.parse(
   readFileSync(
@@ -34,6 +34,30 @@ describe('contract length-unit consistency (ADR-0054)', () => {
     const issues = validateContract(CONTRACT, input('characters'), knownProps, knownEntities);
     expect(issues.join(' ')).toMatch(
       /length_target unit words does not match the project target unit characters/,
+    );
+  });
+});
+
+describe('compact design rendering', () => {
+  it('drops quoting, empty fields and duplicated propositions but keeps every authored value', () => {
+    const out = compactDesign({
+      characters: {
+        characters: [
+          {
+            display_name: '카일 라인하르트',
+            age_at_start: 18,
+            aliases: ['결함 회로'],
+            goals: ['생존한다'],
+            flaws: [],
+            registers: [{ toward: '리아', formality: 2 }],
+          },
+        ],
+        propositions: [{ statement: '빙의자다' }],
+      },
+      world: { terminology: [{ term: '마나', english: 'Mana', decision: 'preserve' }] },
+    });
+    expect(out).toBe(
+      '{characters: {characters: [{display_name: 카일 라인하르트; age_at_start: 18; goals: [생존한다]; registers: [{toward: 리아; formality: 2}]}]}; world: {terminology: [{term: 마나}]}}',
     );
   });
 });
