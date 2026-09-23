@@ -42,6 +42,16 @@ Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live`, stacked on K2. Steps 7–8
     only by moving to the next route and genspark mode had one; each genspark route now has one same-model
     retry. The blueprint (4 seasons, 10 endgame requirements) and the season-1 pacing map completed; season 2
     stopped on the same 5-hour limit after about 30 Opus calls in the window. Resume as above.
+  - 2026-09-23, Notion bridge (`YEONJAE_PROVIDER_MODE=notion`, ADR-0058; `notion-ai` for every class): seasons
+    2–4 of the pacing map completed (15 arcs over 200 chapters, no repairs needed), then chapter 1's arc plan,
+    contract, scene plan and scenes. Each stage exposed one live-shape defect, each fixed with a recorded
+    regression test: `repetition_check` returned as prose (the Korean arc_planner prompt's example shows a
+    string), the contract envelope never set `version` (the prompt tells the model the workflow fills it),
+    and `writer_notes` returned as a list. The full design was rendered as ~50k characters of JSON into every
+    chapter-planner prompt, past the bridge's input cap (the request failed deterministically at ~91k
+    characters); it is now rendered unquoted without empty fields or duplicated propositions (~37k). Notion
+    calls take 4–6 minutes each; the bridge occasionally times out internally and the same-model retry covers
+    it.
 
 ## Checkpoint K2 — Korean-webnovel craft, pacing map, episode structure — 2026-09-22
 
