@@ -398,8 +398,10 @@ export function normalizeContractOutput(raw: unknown, input: ContractNormalizeIn
     })
     .filter((x) => x !== undefined);
 
+  const title = str(r.title);
   const out: Rec = {
     purpose,
+    ...(title ? { title: title.slice(0, 80) } : {}),
     ...(str(r.reader_experience) ? { reader_experience: str(r.reader_experience) } : {}),
     ...(str(r.arc_objective_contribution)
       ? { arc_objective_contribution: str(r.arc_objective_contribution) }

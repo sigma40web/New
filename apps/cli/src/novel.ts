@@ -54,6 +54,7 @@ function depsFor(pool: Pool): (input: { workspaceId: string; projectId: string }
     gateway: new Gateway({
       providers: resolved.providers(),
       routing: resolved.routing,
+      roleRoutes: resolved.roleRoutes,
       budget: shared ? new SharedBudget(pool) : new MemoryBudget(budgetCents),
       ...(shared
         ? { admission: new PgProviderAdmission(pool, { holder: `cli:${process.pid}` }) }

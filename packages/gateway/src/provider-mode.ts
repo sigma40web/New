@@ -62,19 +62,27 @@ export function replayRouting(): RoutingTable {
   };
 }
 
+/**
+ * The gateway retries only by moving to the next route. The bridge serves one model per route and sits
+ * behind a tunnel that drops connections (ECONNRESET, HTTP 524), so each genspark route is followed by a
+ * second entry for the same model: one retry on a policy-retryable failure, none on anything else.
+ */
+function gensparkRoute(modelId: string, family: string): RouteEntry[] {
+  const entry = {
+    modelId,
+    provider: 'genspark',
+    priority: 1,
+    family,
+    priceInPerMTokCents: 0,
+    priceOutPerMTokCents: 0,
+    maxContextTokens: 128_000,
+    supportsJsonSchema: true,
+  };
+  return [entry, { ...entry, priority: 2 }];
+}
+
 export function gensparkRouting(env: NodeJS.ProcessEnv = process.env): RoutingTable {
-  const route = (modelId: string, family: string) => [
-    {
-      modelId,
-      provider: 'genspark',
-      priority: 1,
-      family,
-      priceInPerMTokCents: 0,
-      priceOutPerMTokCents: 0,
-      maxContextTokens: 128_000,
-      supportsJsonSchema: true,
-    },
-  ];
+  const route = gensparkRoute;
   const r = env.YEONJAE_MODEL_R ?? 'claude-opus-4-7';
   const rest = env.YEONJAE_MODEL_DEFAULT ?? 'gemini-3.8-flash';
   return {
@@ -91,6 +99,30 @@ export interface ResolvedProviders {
   /** A fresh provider map per gateway; replay providers are stateful (misses/served), so a factory. */
   readonly providers: () => Map<string, Provider>;
   readonly routing: RoutingTable;
+  /** Per-role model overrides (`YEONJAE_ROLE_MODELS`, genspark mode). */
+  readonly roleRoutes?: Readonly<Record<string, readonly RouteEntry[]>> | undefined;
+}
+
+/**
+ * `YEONJAE_ROLE_MODELS="arc_planner=gemini-3.8-flash,chapter_planner=gemini-3.8-flash"` routes those roles to
+ * the named model on the genspark bridge regardless of their class. Unknown syntax is a startup error.
+ */
+export function gensparkRoleRoutes(
+  env: NodeJS.ProcessEnv = process.env,
+): Readonly<Record<string, readonly RouteEntry[]>> | undefined {
+  const raw = env.YEONJAE_ROLE_MODELS?.trim();
+  if (!raw) return undefined;
+  const out: Record<string, RouteEntry[]> = {};
+  for (const pair of raw
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)) {
+    const m = /^([a-z_]+)=([A-Za-z0-9._:-]+)$/.exec(pair);
+    if (!m?.[1] || !m[2])
+      throw new Error(`YEONJAE_ROLE_MODELS entry must look like role=model, got "${pair}"`);
+    out[m[1]] = gensparkRoute(m[2], m[2].split('-')[0] ?? 'genspark');
+  }
+  return out;
 }
 
 /** Resolve providers and routing from the environment, validating the mode's configuration once. */
@@ -146,6 +178,7 @@ export function resolveProvidersFromEnv(
           ],
         ]),
       routing: gensparkRouting(env),
+      roleRoutes: gensparkRoleRoutes(env),
     };
   }
   const replayFile = env.YEONJAE_REPLAY_FILE;

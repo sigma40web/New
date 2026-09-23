@@ -34,6 +34,10 @@ export interface ChapterContract {
    */
   status: 'draft' | 'validated' | 'locked' | 'stale' | 'superseded' | 'realized';
   stale_reasons?: string[];
+  /**
+   * Episode title shown to readers (e.g. Korean 회차 제목); optional (ADR-0057).
+   */
+  title?: string;
   purpose: string;
   reader_experience?: string;
   arc_objective_contribution?: string;

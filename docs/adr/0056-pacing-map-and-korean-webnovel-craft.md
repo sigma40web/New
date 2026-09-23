@@ -22,10 +22,11 @@ split into lines; the prose judge received no measurement of what Korean-webnove
    incident, confrontation, climax, aftermath, reward, relationship, twist, rest), tension 1–10, one core beat,
    thread, payoff, frustration flag, hook type and relationship focus. A deterministic rhythm skeleton (arc
    count and sawtooth tension per season, slow opening for long serials) is supplied as guidance.
-2. **Deterministic pacing validation.** Coverage (every chapter exactly once), contiguous arcs, one or more
-   climax per arc, frustration streak ≤ 3, payoff gap ≤ 5, tension ≥ 8 for ≤ 4 chapters, and no climax or
-   tension > 7 in chapters 1–10 of a serial of 60+ chapters. A violation is a planning rejection
-   (regenerate), never a silently accepted plan.
+2. **Deterministic pacing validation.** Structure is enforced: every chapter exactly once, contiguous arcs of at
+   least three chapters. Rhythm is enforced with a small repair budget: a climax per arc, frustration streak ≤ 3,
+   payoff gap ≤ 5, tension ≥ 8 for ≤ 4 chapters, and tension ≤ 7 in chapters 1–10 of a serial of 60+ chapters.
+   A plan that misses by a few slots is repaired deterministically (the repairs are recorded with the season);
+   a plan that needs more than max(3, 10%) repairs, or breaks structure, is a planning rejection (regenerate).
 3. **The map is part of the bible.** `series-blueprint.pacing` (optional, additive) stores the merged map; the
    arc schedule uses pacing arcs when present (season arcs otherwise, so older projects are unchanged).
    `arc_planner` receives the arc's rhythm table; `chapter_planner` receives the chapter's rhythm position (its

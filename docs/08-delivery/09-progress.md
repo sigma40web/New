@@ -3,6 +3,46 @@
 The single place that records implementation status (ADR-0043). Update it in every checkpoint commit.
 Everything else in `docs/` describes design; only this file claims what exists and what has run.
 
+## Checkpoint K3 — sequence audit, bounded bible calls, live 200-chapter run — 2026-09-22
+
+Branch `hoplite/gortyn-c23fe3a9--craft-pacing--live`, stacked on K2. Steps 7–8; ADR-0057 records the decisions.
+
+- **Sequence audit (step 7):** `docs/08-delivery/13-korean-pipeline-sequence-audit.md` walks the pipeline stage by
+  stage (no stage reads a later output; every chapter stage reads only accepted canon) and lists the gaps: the
+  missing chapter rhythm and Korean prose measurement (closed in K2), missing episode titles and English export
+  headings (closed here), three registered-but-unused families, and two steps considered and not added.
+- **Chapter titles:** optional `chapter-contract.title`, written by `chapter_planner@3.2.0`; the chapter row and
+  Korean exports (`N화. 제목`) use it.
+- **Bounded bible calls:** with `YEONJAE_DESIGN_PARTS=on` the five bible families (v3.2.0, `part` variable) are
+  asked for checkpointed parts that each finish well inside a response-time cap and see earlier parts; merged
+  output is validated as before. Default remains one call per stage; older pinned jobs are unchanged.
+- **Per-role routes:** `YEONJAE_ROLE_MODELS` routes named roles (e.g. arc and chapter planners) to a model
+  regardless of class.
+- **Pacing repairs:** rhythm rules now repair a near-miss season deterministically (recorded with the season)
+  and reject only a plan that needs more than max(3, 10%) repairs or breaks structure. Design outputs drop JSON
+  `null` fields before validation (a live antagonist's unknown age was rejected as a malformed field).
+- **Live run (step 8), 2026-09-22 — blocked by the provider quota, resumable.** Project "엑스트라로 세계를 구하는
+  방법" (200화, ko, academy + possession, harem), `YEONJAE_PROVIDER_MODE=genspark`, R = `claude-opus-4-6`,
+  P/M/C and arc/chapter planners = `gemini-3.8-flash`, `YEONJAE_DESIGN_PARTS=on`.
+  - Spec (gemini) and two concepts (opus, ~100 s each) were schema-valid and idiomatic Korean; concept 1
+    (placement-duel opening, 89-day survival pressure, slow academy start) was approved.
+  - The operator's bridge sits behind a quick tunnel that returns HTTP 524 for responses slower than about
+    two minutes: a 116 s call succeeded; an unbounded full-cast call (~174 s) and an unbounded single-character
+    call (~125 s) were lost. With part budgets, every cast part returned in 43–62 s; the full 9-part cast (7
+    named characters plus two the story needed) completed and is idiomatic Korean with speech-level voice notes
+    (해요체/하게체/반말 per relationship).
+  - The world stage then stopped on HTTP 429: the Genspark account's "AI Chat 5-hour limit" (both models;
+    cooldown reported ≈ 5 h). Nothing after the cast has been generated. Resume with `pnpm cli novel:resume
+    <project> --stop-after=2` then `pnpm cli novel:run <project> --once` (bible), then `novel:run` (chapters 1–2)
+    with the same environment; completed parts replay from their checkpoints.
+  - 2026-09-23, second quota window: world (3 parts) and power system (3 parts) completed; the blueprint was
+    rejected once because the heroine-arcs part filled `endgame_requirements` (not its field) with a blank
+    placeholder that merged into the core part's list. Parts now declare the fields they own and blank
+    placeholder items are dropped. A tunnel `ECONNRESET` then failed a whole step, because the gateway retries
+    only by moving to the next route and genspark mode had one; each genspark route now has one same-model
+    retry. The blueprint (4 seasons, 10 endgame requirements) and the season-1 pacing map completed; season 2
+    stopped on the same 5-hour limit after about 30 Opus calls in the window. Resume as above.
+
 ## Checkpoint K2 — Korean-webnovel craft, pacing map, episode structure — 2026-09-22
 
 Branch `hoplite/gortyn-c23fe3a9--craft-pacing`, stacked on K1. Steps 4–6; ADR-0056 records the decision.
