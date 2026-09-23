@@ -582,13 +582,13 @@ export async function evaluateVersion(
           prose: section('prose', proseScore, dimensionPassed('prose'), {
             judge_score: proseScore,
             drift_flags: prose.output.drift_flags ?? [],
-            dimension_scores: prose.output.dimension_scores ?? {},
+            dimension_scores: likertScores(prose.output.dimension_scores),
             evaluator_call_id: prose.llmCallId,
           }),
           structure: section('structure', structureScore, dimensionPassed('structure'), {
             judge_score: structureScore,
             drift_flags: structure.output.drift_flags ?? [],
-            dimension_scores: structure.output.dimension_scores ?? {},
+            dimension_scores: likertScores(structure.output.dimension_scores),
             ...(structure.output.hook_sentence_index !== undefined
               ? { hook_sentence_index: structure.output.hook_sentence_index }
               : {}),
@@ -603,13 +603,13 @@ export async function evaluateVersion(
           genre: section('genre', genreScore, dimensionPassed('genre'), {
             judge_score: genreScore,
             drift_flags: genre.output.drift_flags ?? [],
-            dimension_scores: genre.output.dimension_scores ?? {},
+            dimension_scores: likertScores(genre.output.dimension_scores),
             evaluator_call_id: genre.llmCallId,
           }),
           voice: section('voice', voiceScore, dimensionPassed('voice'), {
             judge_score: voiceScore,
             drift_flags: voice.output.drift_flags ?? [],
-            dimension_scores: voice.output.dimension_scores ?? {},
+            dimension_scores: likertScores(voice.output.dimension_scores),
             evaluator_call_id: voice.llmCallId,
           }),
           output_language: section(
@@ -698,4 +698,19 @@ export function revisionTargets(scorecard: Scorecard): Issue[] {
   return scorecard.issues.filter(
     (i) => (i.severity === 'blocking' || i.severity === 'major') && i.status === 'open',
   );
+}
+
+/**
+ * Scorecard dimension scores are 1–5. The Korean judge prompts' example shows a 0–100 value (`72`), so live
+ * judges answer on that scale; such values are mapped linearly onto 1–5. Non-numbers are dropped. These
+ * scores are informational: gates read `judge_score`.
+ */
+export function likertScores(raw: Record<string, unknown> | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw ?? {})) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const scaled = v > 5 ? 1 + (Math.min(v, 100) / 100) * 4 : v;
+    out[k] = Math.round(Math.min(5, Math.max(1, scaled)) * 10) / 10;
+  }
+  return out;
 }
