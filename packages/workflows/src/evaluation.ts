@@ -25,6 +25,7 @@ import { koreanProseLint, renderKoLint } from './ko-lint.js';
 import { checkpointPack, packCallInput } from './drafting.js';
 import { type ChapterContract, type StorySpec, compileFor } from './planning.js';
 import { modelCall, runStep, saveArtifact, type WorkflowContext } from './runtime.js';
+import { compactChapterMode, once } from './compact-mode.js';
 
 export type Scorecard = Generated.ScorecardSchema.Scorecard;
 export type Issue = Generated.IssueSchema.Issue;
@@ -348,24 +349,123 @@ export async function evaluateVersion(
       const packIn = packCallInput(checker.stored);
       const act = (name: string) => `${name}:${input.contract.chapter_number}:r${input.round}`;
 
-      const contractCall = await modelCall<{
-        criteria?: {
-          criterion_id: string;
-          passed: boolean;
-          evidence_paragraph_ids?: string[];
-          note?: string;
-        }[];
-      }>(ctx, {
-        step: 'evaluate',
-        family: 'contract_checker',
-        activityId: act('contract_check'),
-        variables: {
-          chapter_text: chapterText,
-          chapter_contract:
-            checker.stored.variables.chapter_contract ?? JSON.stringify(input.contract),
-        },
-        pack: packIn,
-      });
+      // Independent calls; compact mode (ADR-0059) runs them concurrently, standard mode in order.
+      const calls = {
+        contractCall: once(() =>
+          modelCall<{
+            criteria?: {
+              criterion_id: string;
+              passed: boolean;
+              evidence_paragraph_ids?: string[];
+              note?: string;
+            }[];
+          }>(ctx, {
+            step: 'evaluate',
+            family: 'contract_checker',
+            activityId: act('contract_check'),
+            variables: {
+              chapter_text: chapterText,
+              chapter_contract:
+                checker.stored.variables.chapter_contract ?? JSON.stringify(input.contract),
+            },
+            pack: packIn,
+          }),
+        ),
+        continuity: once(() =>
+          modelCall<{ issues?: RawIssue[] }>(ctx, {
+            step: 'evaluate',
+            family: 'continuity_checker',
+            activityId: act('continuity'),
+            variables: {
+              chapter_text: chapterText,
+              locked_facts: checker.stored.variables.timeline_position ?? '(none)',
+            },
+            pack: packIn,
+          }),
+        ),
+        leak: once(() =>
+          modelCall<{ issues?: RawIssue[] }>(ctx, {
+            step: 'evaluate',
+            family: 'knowledge_leak_checker',
+            activityId: act('knowledge_leak'),
+            variables: {
+              chapter_text: chapterText,
+              knowledge_table: checker.stored.variables.canon_state ?? '(none)',
+              knowledge_guards: checker.stored.variables.timeline_position ?? '(none)',
+              secrets: checker.stored.variables.canon_state ?? '(none)',
+            },
+            pack: packIn,
+          }),
+        ),
+        prose: once(() =>
+          modelCall<JudgeOutput>(ctx, {
+            step: 'evaluate',
+            family: 'prose_judge',
+            activityId: act('prose_judge'),
+            variables: {
+              chapter_text: chapterText,
+              prose_lint_report:
+                ctx.identity.outputLanguage.language === 'ko'
+                  ? `한국어 출력 언어 검사: 신뢰도 ${det.output_language.english_confidence}; 분량 ${det.length.count}${det.length.unit === 'characters' ? '자' : ` ${det.length.unit}`}.\n${renderKoLint(koreanProseLint(v.text))}`
+                  : `English output-language check: confidence ${det.output_language.english_confidence}; length ${det.length.count} ${det.length.unit}.`,
+            },
+            block: compileFor(ctx, 'judge_rubric_prose'),
+          }),
+        ),
+        structure: once(() =>
+          modelCall<JudgeOutput>(ctx, {
+            step: 'evaluate',
+            family: 'structure_judge',
+            activityId: act('structure_judge'),
+            variables: {
+              chapter_text: chapterText,
+              structure_lint_report:
+                ctx.identity.outputLanguage.language === 'ko'
+                  ? `문단 ${paragraphs.length}개; 잘림 검사 ${det.truncation.passed ? '통과' : '실패'}.`
+                  : `paragraphs ${paragraphs.length}; truncation check ${det.truncation.passed ? 'passed' : 'FAILED'}.`,
+              contract_shape:
+                ctx.identity.outputLanguage.language === 'ko'
+                  ? `도입 ${input.contract.opening.type}; 절단 ${input.contract.hook.type}; 로컬 보상 ${input.contract.local_satisfaction.map((s) => s.type).join(', ')}; 장면 ${input.contract.scene_count}개.`
+                  : `opening ${input.contract.opening.type}; hook ${input.contract.hook.type}; local satisfaction ${input.contract.local_satisfaction.map((s) => s.type).join(', ')}; scenes ${input.contract.scene_count}.`,
+            },
+            block: compileFor(ctx, 'judge_rubric_structure'),
+          }),
+        ),
+        genre: once(() =>
+          modelCall<JudgeOutput>(ctx, {
+            step: 'evaluate',
+            family: 'genre_judge',
+            activityId: act('genre_judge'),
+            variables: {
+              chapter_text: chapterText,
+              terminology_report:
+                ctx.identity.outputLanguage.language === 'ko'
+                  ? `허용 이름 ${input.allowlist.length}개; 주 장르 ${input.spec.items.find((i) => i.category === 'genre')?.text ?? '(미지정)'}.`
+                  : `allowlisted names ${input.allowlist.length}; primary genre ${input.spec.items.find((i) => i.category === 'genre')?.text ?? '(unspecified)'}.`,
+            },
+            block: compileFor(ctx, 'judge_rubric_genre'),
+          }),
+        ),
+        voice: once(() =>
+          modelCall<JudgeOutput>(ctx, {
+            step: 'evaluate',
+            family: 'voice_judge',
+            activityId: act('voice_judge'),
+            variables: {
+              utterances: chapterText,
+              register_digests: checker.stored.variables.register_digests ?? '(none)',
+              register_check_report:
+                ctx.identity.outputLanguage.language === 'ko'
+                  ? `말높이 요약 제공: ${checker.stored.variables.register_digests ? '예' : '아니오'}.`
+                  : `dialogue register digests supplied: ${checker.stored.variables.register_digests ? 'yes' : 'no'}.`,
+            },
+            block: compileFor(ctx, 'judge_rubric_prose'),
+          }),
+        ),
+      };
+      if (compactChapterMode()) await Promise.allSettled(Object.values(calls).map((c) => c()));
+
+      const contractCall = await calls.contractCall();
       evaluatorCalls.push(contractCall.llmCallId);
       const criteria = contractCall.output.criteria ?? [];
       const criteriaResults = input.contract.acceptance_criteria.map((c) => {
@@ -406,73 +506,25 @@ export async function evaluateVersion(
           );
       });
 
-      const continuity = await modelCall<{ issues?: RawIssue[] }>(ctx, {
-        step: 'evaluate',
-        family: 'continuity_checker',
-        activityId: act('continuity'),
-        variables: {
-          chapter_text: chapterText,
-          locked_facts: checker.stored.variables.timeline_position ?? '(none)',
-        },
-        pack: packIn,
-      });
+      const continuity = await calls.continuity();
       evaluatorCalls.push(continuity.llmCallId);
       (continuity.output.issues ?? []).forEach((r, i) =>
         issues.push(toIssue(ctx, v.id, 'judge:continuity_checker', 'continuity', r, i)),
       );
 
-      const leak = await modelCall<{ issues?: RawIssue[] }>(ctx, {
-        step: 'evaluate',
-        family: 'knowledge_leak_checker',
-        activityId: act('knowledge_leak'),
-        variables: {
-          chapter_text: chapterText,
-          knowledge_table: checker.stored.variables.canon_state ?? '(none)',
-          knowledge_guards: checker.stored.variables.timeline_position ?? '(none)',
-          secrets: checker.stored.variables.canon_state ?? '(none)',
-        },
-        pack: packIn,
-      });
+      const leak = await calls.leak();
       evaluatorCalls.push(leak.llmCallId);
       (leak.output.issues ?? []).forEach((r, i) =>
         issues.push(toIssue(ctx, v.id, 'judge:knowledge_leak_checker', 'knowledge', r, i)),
       );
 
       // Two separate judges, two separate identity variants, two separate gates.
-      const prose = await modelCall<JudgeOutput>(ctx, {
-        step: 'evaluate',
-        family: 'prose_judge',
-        activityId: act('prose_judge'),
-        variables: {
-          chapter_text: chapterText,
-          prose_lint_report:
-            ctx.identity.outputLanguage.language === 'ko'
-              ? `한국어 출력 언어 검사: 신뢰도 ${det.output_language.english_confidence}; 분량 ${det.length.count}${det.length.unit === 'characters' ? '자' : ` ${det.length.unit}`}.\n${renderKoLint(koreanProseLint(v.text))}`
-              : `English output-language check: confidence ${det.output_language.english_confidence}; length ${det.length.count} ${det.length.unit}.`,
-        },
-        block: compileFor(ctx, 'judge_rubric_prose'),
-      });
+      const prose = await calls.prose();
       evaluatorCalls.push(prose.llmCallId);
       (prose.output.issues ?? []).forEach((r, i) =>
         issues.push(toIssue(ctx, v.id, 'judge:prose_judge', 'prose', r, i)),
       );
-      const structure = await modelCall<JudgeOutput>(ctx, {
-        step: 'evaluate',
-        family: 'structure_judge',
-        activityId: act('structure_judge'),
-        variables: {
-          chapter_text: chapterText,
-          structure_lint_report:
-            ctx.identity.outputLanguage.language === 'ko'
-              ? `문단 ${paragraphs.length}개; 잘림 검사 ${det.truncation.passed ? '통과' : '실패'}.`
-              : `paragraphs ${paragraphs.length}; truncation check ${det.truncation.passed ? 'passed' : 'FAILED'}.`,
-          contract_shape:
-            ctx.identity.outputLanguage.language === 'ko'
-              ? `도입 ${input.contract.opening.type}; 절단 ${input.contract.hook.type}; 로컬 보상 ${input.contract.local_satisfaction.map((s) => s.type).join(', ')}; 장면 ${input.contract.scene_count}개.`
-              : `opening ${input.contract.opening.type}; hook ${input.contract.hook.type}; local satisfaction ${input.contract.local_satisfaction.map((s) => s.type).join(', ')}; scenes ${input.contract.scene_count}.`,
-        },
-        block: compileFor(ctx, 'judge_rubric_structure'),
-      });
+      const structure = await calls.structure();
       evaluatorCalls.push(structure.llmCallId);
       (structure.output.issues ?? []).forEach((r, i) =>
         issues.push(toIssue(ctx, v.id, 'judge:structure_judge', 'structure', r, i)),
@@ -483,37 +535,12 @@ export async function evaluateVersion(
       // closed. Each is its own immutable family with its own identity variant and its own gate — fluent
       // English, webnovel structure, genre fit and voice/register are never folded into one score
       // (EVAL-SEPARATION-001). The full evaluator build-out (richer evidence, calibration) is B-6-5.
-      const genre = await modelCall<JudgeOutput>(ctx, {
-        step: 'evaluate',
-        family: 'genre_judge',
-        activityId: act('genre_judge'),
-        variables: {
-          chapter_text: chapterText,
-          terminology_report:
-            ctx.identity.outputLanguage.language === 'ko'
-              ? `허용 이름 ${input.allowlist.length}개; 주 장르 ${input.spec.items.find((i) => i.category === 'genre')?.text ?? '(미지정)'}.`
-              : `allowlisted names ${input.allowlist.length}; primary genre ${input.spec.items.find((i) => i.category === 'genre')?.text ?? '(unspecified)'}.`,
-        },
-        block: compileFor(ctx, 'judge_rubric_genre'),
-      });
+      const genre = await calls.genre();
       evaluatorCalls.push(genre.llmCallId);
       (genre.output.issues ?? []).forEach((r, i) =>
         issues.push(toIssue(ctx, v.id, 'judge:genre_judge', 'genre', r, i)),
       );
-      const voice = await modelCall<JudgeOutput>(ctx, {
-        step: 'evaluate',
-        family: 'voice_judge',
-        activityId: act('voice_judge'),
-        variables: {
-          utterances: chapterText,
-          register_digests: checker.stored.variables.register_digests ?? '(none)',
-          register_check_report:
-            ctx.identity.outputLanguage.language === 'ko'
-              ? `말높이 요약 제공: ${checker.stored.variables.register_digests ? '예' : '아니오'}.`
-              : `dialogue register digests supplied: ${checker.stored.variables.register_digests ? 'yes' : 'no'}.`,
-        },
-        block: compileFor(ctx, 'judge_rubric_prose'),
-      });
+      const voice = await calls.voice();
       evaluatorCalls.push(voice.llmCallId);
       (voice.output.issues ?? []).forEach((r, i) =>
         issues.push(toIssue(ctx, v.id, 'judge:voice_judge', 'voice', r, i)),
