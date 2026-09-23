@@ -640,3 +640,57 @@ export function normalizeArcSelfChecks(raw: Rec): Rec {
   }
   return out;
 }
+
+const ANNOTATION_KEYS = new Set([
+  'utterance_start',
+  'utterance_end',
+  'speaker_id',
+  'addressee_ids',
+  'intentional_shift',
+  'is_monologue',
+]);
+
+/**
+ * The reviser's self-reported patch fields. The Korean targeted_reviser prompts show `regression: false`,
+ * `changed_claims` as before/after objects and paragraph-keyed speaker notes, none of which is the patch
+ * schema's shape. Claims become "before → after" strings; a boolean regression becomes `{ passed }` (the
+ * workflow runs its own regression checks); speaker annotations are kept only when every item is
+ * offset-anchored with no foreign keys (they are optional).
+ */
+export function normalizePatchOutput(raw: Rec): Rec {
+  const out: Rec = { ...raw };
+  const claims = arr(raw.changed_claims)
+    .map((c) => {
+      if (str(c)) return str(c);
+      if (!isRec(c)) return undefined;
+      const before = str(c.before);
+      const after = str(c.after);
+      return before && after ? `${before} → ${after}` : (after ?? before);
+    })
+    .filter((c): c is string => c !== undefined);
+  out.changed_claims = claims;
+  const reg = raw.regression;
+  delete out.regression;
+  if (typeof reg === 'boolean') out.regression = { passed: !reg };
+  else if (isRec(reg))
+    out.regression = {
+      ...(Array.isArray(reg.checks_run)
+        ? { checks_run: reg.checks_run.filter((x): x is string => typeof x === 'string') }
+        : {}),
+      ...(typeof reg.passed === 'boolean' ? { passed: reg.passed } : {}),
+      ...(typeof reg.reverted === 'boolean' ? { reverted: reg.reverted } : {}),
+      ...(str(reg.notes) ? { notes: str(reg.notes) } : {}),
+    };
+  const notes = arr(raw.speaker_annotations);
+  const anchored = notes.every(
+    (s) =>
+      isRec(s) &&
+      Number.isInteger(s.utterance_start) &&
+      Number.isInteger(s.utterance_end) &&
+      typeof s.speaker_id === 'string' &&
+      UUID.test(s.speaker_id) &&
+      Object.keys(s).every((k) => ANNOTATION_KEYS.has(k)),
+  );
+  if (!anchored || notes.length === 0) delete out.speaker_annotations;
+  return out;
+}

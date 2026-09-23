@@ -14,6 +14,7 @@ import {
 import { type Generated, validatorFor } from '@yeonjae/domain';
 import { checkOutputLanguage, codePointLength, sliceCodePoints, toNfcText } from '@yeonjae/prose';
 import { anchorSpan } from './anchoring.js';
+import { normalizePatchOutput } from './plan-normalize.js';
 import { contentHashOf } from './drafting.js';
 import { type Issue } from './evaluation.js';
 import { WorkflowError } from './errors.js';
@@ -137,7 +138,7 @@ export async function reviseVersion(
         },
         block: compileFor(ctx, 'editor_full'),
       });
-      const raw = call.output as Patch;
+      const raw = normalizePatchOutput(call.output) as unknown as Patch;
       const candidate: Patch = {
         ...raw,
         // Only must-preserve ids count as acknowledgements. The Korean reviser prompt's example shows

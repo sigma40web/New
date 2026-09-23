@@ -3,6 +3,7 @@ import { validatorFor } from '@yeonjae/domain';
 import {
   normalizeArcSelfChecks,
   normalizeContractOutput,
+  normalizePatchOutput,
   normalizeScenePlans,
 } from './plan-normalize.js';
 import { type ChapterContract } from './planning.js';
@@ -182,5 +183,31 @@ describe('arc planner self-checks', () => {
     ).toEqual({ compared_arc_ids: [id], similarity_score: 1, notes: 'ok' });
     const dropped = normalizeArcSelfChecks({ repetition_check: 3, cadence_check: null });
     expect('repetition_check' in dropped || 'cadence_check' in dropped).toBe(false);
+  });
+});
+
+describe('reviser patch self-reports', () => {
+  it('coerces the prompt-shaped fields (recorded live output)', () => {
+    const out = normalizePatchOutput({
+      scope: 'scene',
+      new_text: '총장이 다음 이름을 불렀다.',
+      regression: false,
+      changed_claims: [{ before: '침묵', after: '속삭임' }, '호명 순서 유지', {}],
+      speaker_annotations: [{ paragraph_id: 'p3', speaker: '카일' }],
+    });
+    expect(out.regression).toEqual({ passed: true });
+    expect(out.changed_claims).toEqual(['침묵 → 속삭임', '호명 순서 유지']);
+    expect('speaker_annotations' in out).toBe(false);
+    expect(out.new_text).toBe('총장이 다음 이름을 불렀다.');
+  });
+
+  it('keeps a well-formed regression object and anchored annotations', () => {
+    const speaker = '0190f0a2-7b3c-7d4e-8f00-000000000001';
+    const out = normalizePatchOutput({
+      regression: { passed: false, notes: '재검사', extra: 1 },
+      speaker_annotations: [{ utterance_start: 0, utterance_end: 4, speaker_id: speaker }],
+    });
+    expect(out.regression).toEqual({ passed: false, notes: '재검사' });
+    expect(out.speaker_annotations).toHaveLength(1);
   });
 });
