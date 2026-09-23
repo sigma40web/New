@@ -4,6 +4,8 @@
  * There is no default that reaches a paid provider. `YEONJAE_PROVIDER_MODE` must be one of:
  *   * `replay`   — recorded fixture responses (tests, CLI demos); needs `YEONJAE_REPLAY_FILE`.
  *   * `genspark` — the local Genspark bridge (`tools/genspark_provider_bridge.py`).
+ *   * `notion`   — an operator's Notion AI bridge with the same `/v1/complete` wire contract; needs
+ *     `YEONJAE_NOTION_URL` (ADR-0058).
  *   * `live`     — an OpenAI-compatible or Anthropic API keyed by `YEONJAE_LIVE_*` (see live-config.ts).
  *   * `simulated` — a deterministic role-scripted stand-in supplied by the caller (`@yeonjae/workflows`
  *     ships one); no network, no spend, no prose quality claim. For local dry runs of the whole loop.
@@ -18,16 +20,17 @@ import { liveGatewayFromEnv } from './live-config.js';
 import { ReplayProvider, type Recording } from './replay-provider.js';
 import { type Provider } from './types.js';
 
-export type ProviderMode = 'replay' | 'genspark' | 'live' | 'simulated';
+export type ProviderMode = 'replay' | 'genspark' | 'notion' | 'live' | 'simulated';
 
 export function providerModeFromEnv(env: NodeJS.ProcessEnv = process.env): ProviderMode {
   const mode = env.YEONJAE_PROVIDER_MODE;
   if (mode === 'replay') return 'replay';
   if (mode === 'genspark') return 'genspark';
+  if (mode === 'notion') return 'notion';
   if (mode === 'live') return 'live';
   if (mode === 'simulated') return 'simulated';
   throw new Error(
-    "YEONJAE_PROVIDER_MODE must be set to 'replay', 'genspark', 'live' or 'simulated'; the process refuses to start without an explicit " +
+    "YEONJAE_PROVIDER_MODE must be set to 'replay', 'genspark', 'notion', 'live' or 'simulated'; the process refuses to start without an explicit " +
       'provider mode so a misconfigured deployment cannot issue paid calls',
   );
 }
@@ -67,10 +70,10 @@ export function replayRouting(): RoutingTable {
  * behind a tunnel that drops connections (ECONNRESET, HTTP 524), so each genspark route is followed by a
  * second entry for the same model: one retry on a policy-retryable failure, none on anything else.
  */
-function gensparkRoute(modelId: string, family: string): RouteEntry[] {
+function gensparkRoute(modelId: string, family: string, provider = 'genspark'): RouteEntry[] {
   const entry = {
     modelId,
-    provider: 'genspark',
+    provider,
     priority: 1,
     family,
     priceInPerMTokCents: 0,
@@ -92,6 +95,18 @@ export function gensparkRouting(env: NodeJS.ProcessEnv = process.env): RoutingTa
     C: route(env.YEONJAE_MODEL_C ?? rest, 'google'),
     E: [],
   };
+}
+
+export const DEFAULT_NOTION_MODEL = 'notion-ai';
+
+/**
+ * The Notion bridge serves one model for every class (`YEONJAE_NOTION_MODEL`, default `notion-ai`). The
+ * genspark model variables are deliberately not read: they name models this bridge does not serve.
+ */
+export function notionRouting(env: NodeJS.ProcessEnv = process.env): RoutingTable {
+  const model = env.YEONJAE_NOTION_MODEL ?? DEFAULT_NOTION_MODEL;
+  const route = () => gensparkRoute(model, 'notion', 'notion');
+  return { R: route(), P: route(), M: route(), C: route(), E: [] };
 }
 
 export interface ResolvedProviders {
@@ -179,6 +194,32 @@ export function resolveProvidersFromEnv(
         ]),
       routing: gensparkRouting(env),
       roleRoutes: gensparkRoleRoutes(env),
+    };
+  }
+  if (mode === 'notion') {
+    const url = env.YEONJAE_NOTION_URL;
+    if (!url)
+      throw new Error('YEONJAE_NOTION_URL must name the bridge when YEONJAE_PROVIDER_MODE=notion');
+    return {
+      mode,
+      providers: () =>
+        new Map<string, Provider>([
+          [
+            'notion',
+            new GensparkProvider({
+              name: 'notion',
+              baseUrl: url,
+              allowNonLoopback: true,
+              ...(env.YEONJAE_NOTION_TIMEOUT_MS
+                ? { timeoutMs: Number(env.YEONJAE_NOTION_TIMEOUT_MS) }
+                : {}),
+              ...(env.YEONJAE_NOTION_TOKEN
+                ? { headers: { authorization: `Bearer ${env.YEONJAE_NOTION_TOKEN}` } }
+                : {}),
+            }),
+          ],
+        ]),
+      routing: notionRouting(env),
     };
   }
   const replayFile = env.YEONJAE_REPLAY_FILE;

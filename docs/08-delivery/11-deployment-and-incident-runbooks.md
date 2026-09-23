@@ -478,8 +478,8 @@ migration role. Rotate the password, not the role.
 
 ### 8A.4 Provider credentials (`YEONJAE_LIVE_API_KEY`, `YEONJAE_LIVE_FALLBACK_API_KEY`)
 
-Every process refuses to start without an explicit `YEONJAE_PROVIDER_MODE` (`replay`, `genspark` or
-`live`; ADR-0051). In `live` mode the key is read once at startup and held in the adapter's closure —
+Every process refuses to start without an explicit `YEONJAE_PROVIDER_MODE` (`replay`, `genspark`,
+`notion` or `live`; ADR-0051, ADR-0058). In `live` mode the key is read once at startup and held in the adapter's closure —
 it is never placed on a config object, a log line or an error message. To rotate:
 
 1. Add the new key alongside the old one in the secret manager.

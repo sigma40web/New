@@ -65,6 +65,7 @@
 | [0056](0056-pacing-map-and-korean-webnovel-craft.md) | The bible carries a validated chapter-by-chapter pacing map; planners read arc rhythm and chapter rhythm position; writers get explicit Korean-webnovel craft rules and a deterministic Korean prose lint |
 
 | [0057](0057-part-scoped-bible-and-chapter-titles.md) | Bible stages can be generated in bounded, checkpointed parts behind response-capped providers; per-role model routes; chapter titles and Korean export headings |
+| [0058](0058-notion-bridge-provider-mode.md) | `YEONJAE_PROVIDER_MODE=notion`: an operator's Notion AI bridge on the same wire contract, one model for every class |
 
 New ADRs: copy `0000-adr-template.md`, take the next number, link it here, and update the traceability
 matrix in the same change.

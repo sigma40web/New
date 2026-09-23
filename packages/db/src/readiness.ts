@@ -185,6 +185,7 @@ export const PROVIDER_MODES = [
   'synthetic',
   'live',
   'genspark',
+  'notion',
   'simulated',
 ] as const;
 export type ProviderMode = (typeof PROVIDER_MODES)[number];
