@@ -13,6 +13,7 @@ import {
 } from '@yeonjae/db';
 import { type Generated, validatorFor } from '@yeonjae/domain';
 import { checkOutputLanguage, codePointLength, sliceCodePoints, toNfcText } from '@yeonjae/prose';
+import { anchorSpan } from './anchoring.js';
 import { contentHashOf } from './drafting.js';
 import { type Issue } from './evaluation.js';
 import { WorkflowError } from './errors.js';
@@ -136,8 +137,14 @@ export async function reviseVersion(
         },
         block: compileFor(ctx, 'editor_full'),
       });
+      const raw = call.output as Patch;
       const candidate: Patch = {
-        ...(call.output as Patch),
+        ...raw,
+        // Only must-preserve ids count as acknowledgements. The Korean reviser prompt's example shows
+        // prose ("지킨 사실"), which live models copy; an unacknowledged required id still fails below.
+        preserved_facts_ack: Array.isArray(raw.preserved_facts_ack)
+          ? raw.preserved_facts_ack.filter((a) => mustPreserve.includes(a))
+          : [],
         id: patchId(ctx, input.version.id, input.round),
         from_version_id: input.version.id,
         issue_ids: targeted.map((i) => i.id),
@@ -150,7 +157,24 @@ export async function reviseVersion(
           `patch does not validate: ${v.errors.map((e) => `${e.path} ${e.message}`).join('; ')}`,
           { step: 'revise', recommendedActions: ['regenerate'] },
         );
-      const patch = v.value;
+      // A reviser that sees only an excerpt may give excerpt-relative offsets; the quote is the anchor.
+      const quote = v.value.span.original_quote;
+      const anchored = anchorSpan(nfc, {
+        start: v.value.span.start,
+        end: v.value.span.end,
+        quote,
+      });
+      const patch: Patch = {
+        ...v.value,
+        span: {
+          ...v.value.span,
+          start: anchored.start,
+          end: anchored.end,
+          ...(quote !== undefined && anchored.quote !== undefined
+            ? { original_quote: anchored.quote }
+            : {}),
+        },
+      };
       // Anchor the patch to the parent's exact code points; original_quote, when given, must match.
       if (patch.span.start < 0 || patch.span.end > total || patch.span.start >= patch.span.end)
         throw new WorkflowError(
